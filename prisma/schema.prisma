@@ -1,0 +1,314 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────
+// NextAuth.js 必須テーブル
+// ─────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  role          Role      @default(STAFF)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts   Account[]
+  sessions   Session[]
+  cases      Case[]
+  talents    Talent[]
+  contracts  Contract[]
+  activities ActivityLog[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+enum Role {
+  ADMIN
+  STAFF
+}
+
+// ─────────────────────────────────────────
+// ビジネスデータ
+// ─────────────────────────────────────────
+
+model Email {
+  id            String      @id @default(cuid())
+  receivedAt    DateTime
+  from          String
+  fromEmail     String
+  subject       String
+  bodyText      String      @db.Text
+  type          EmailType
+  status        EmailStatus @default(PENDING)
+  skills        String[]
+  extractedName String?
+  confidence    Int?
+  s3Key         String?
+
+  cases   Case[]   @relation("EmailToCase")
+  talents Talent[] @relation("EmailToTalent")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum EmailType {
+  CASE
+  TALENT
+}
+
+enum EmailStatus {
+  PENDING
+  PARSING
+  PARSED
+  ERROR
+}
+
+model Case {
+  id             String     @id @default(cuid())
+  title          String
+  client         String
+  clientEmail    String?
+  skills         String[]
+  unitPrice      Int
+  startDate      DateTime
+  workStyle      WorkStyle
+  status         CaseStatus @default(OPEN)
+  assignedUserId String
+  sourceEmailId  String?    @unique
+
+  assignedUser User        @relation(fields: [assignedUserId], references: [id])
+  sourceEmail  Email?      @relation("EmailToCase", fields: [sourceEmailId], references: [id])
+  matchings    Matching[]
+  contracts    Contract[]
+  activities   ActivityLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+enum WorkStyle {
+  REMOTE
+  ONSITE
+  HYBRID
+}
+
+enum CaseStatus {
+  OPEN
+  MATCHING
+  PROPOSING
+  INTERVIEWING
+  CONTRACTED
+  CLOSED
+}
+
+model Talent {
+  id             String       @id @default(cuid())
+  name           String
+  skills         String[]
+  experience     Int
+  desiredRate    Int
+  location       String
+  workStyle      WorkStyle
+  status         TalentStatus @default(AVAILABLE)
+  availableFrom  DateTime?
+  agencyEmail    String?
+  assignedUserId String
+  sourceEmailId  String?      @unique
+
+  assignedUser User        @relation(fields: [assignedUserId], references: [id])
+  sourceEmail  Email?      @relation("EmailToTalent", fields: [sourceEmailId], references: [id])
+  matchings    Matching[]
+  contracts    Contract[]
+  activities   ActivityLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+enum TalentStatus {
+  AVAILABLE
+  ACTIVE
+  NEGOTIATING
+  ENDING_SOON
+  INACTIVE
+}
+
+model Matching {
+  id              String         @id @default(cuid())
+  caseId          String
+  talentId        String
+  score           Int
+  skillMatchRate  Int
+  unitPriceOk     Boolean
+  timingOk        Boolean
+  locationOk      Boolean
+  costPrice       Int
+  sellPrice       Int
+  grossProfitRate Float
+  grossProfitOk   Boolean
+  reason          String?        @db.Text
+  isAutoSend      Boolean        @default(false)
+  status          MatchingStatus @default(UNPROPOSED)
+
+  case       Case      @relation(fields: [caseId], references: [id])
+  talent     Talent    @relation(fields: [talentId], references: [id])
+  proposal   Proposal?
+  activities ActivityLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([caseId, talentId])
+  @@index([status])
+}
+
+enum MatchingStatus {
+  UNPROPOSED
+  PENDING_AUTO
+  SENT
+  REPLIED
+  INTERVIEWING
+  CONTRACTED
+  REJECTED
+}
+
+model Proposal {
+  id              String         @id @default(cuid())
+  matchingId      String         @unique
+  to              String
+  cc              String?
+  subject         String
+  bodyText        String         @db.Text
+  status          ProposalStatus @default(DRAFT)
+  isAutoSend      Boolean        @default(false)
+  costPrice       Int
+  sellPrice       Int
+  grossProfitRate Float
+  sentAt          DateTime?
+
+  matching   Matching    @relation(fields: [matchingId], references: [id])
+  contract   Contract?
+  activities ActivityLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum ProposalStatus {
+  DRAFT
+  PENDING_AUTO
+  SENT
+  REPLIED
+  REJECTED
+}
+
+model Contract {
+  id              String         @id @default(cuid())
+  caseId          String
+  talentId        String
+  assignedUserId  String
+  proposalId      String?        @unique
+  startDate       DateTime
+  endDate         DateTime?
+  unitPrice       Int
+  costPrice       Int
+  grossProfitRate Float
+  status          ContractStatus @default(ACTIVE)
+
+  case         Case      @relation(fields: [caseId], references: [id])
+  talent       Talent    @relation(fields: [talentId], references: [id])
+  assignedUser User      @relation(fields: [assignedUserId], references: [id])
+  proposal     Proposal? @relation(fields: [proposalId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+enum ContractStatus {
+  ACTIVE
+  ENDING_SOON
+  ENDED
+  RENEWAL_PENDING
+}
+
+model ActivityLog {
+  id          String          @id @default(cuid())
+  type        ActivityLogType
+  description String
+  userId      String?
+  caseId      String?
+  talentId    String?
+  matchingId  String?
+  proposalId  String?
+
+  user     User?     @relation(fields: [userId], references: [id])
+  case     Case?     @relation(fields: [caseId], references: [id])
+  talent   Talent?   @relation(fields: [talentId], references: [id])
+  matching Matching? @relation(fields: [matchingId], references: [id])
+  proposal Proposal? @relation(fields: [proposalId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+enum ActivityLogType {
+  EMAIL_RECEIVED
+  EMAIL_PARSED
+  CASE_CREATED
+  TALENT_CREATED
+  MATCHING_CREATED
+  PROPOSAL_SENT
+  PROPOSAL_REPLIED
+  CONTRACT_CREATED
+  CONTRACT_RENEWED
+}
