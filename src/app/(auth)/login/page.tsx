@@ -32,8 +32,12 @@ export default function LoginPage() {
     setErrors({})
 
     try {
-      await signIn('credentials', { email, password, redirect: false })
-      router.push('/dashboard')
+      const result = await signIn('credentials', { email, password, redirect: false })
+      if (result?.ok === false) {
+        setErrors({ password: 'メールアドレスまたはパスワードが正しくありません' })
+      } else {
+        router.push('/dashboard')
+      }
     } catch {
       setErrors({ password: 'メールアドレスまたはパスワードが正しくありません' })
     } finally {

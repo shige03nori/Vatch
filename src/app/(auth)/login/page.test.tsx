@@ -58,12 +58,12 @@ test('ログイン成功時に /dashboard へ遷移する', async () => {
       password: 'password123',
       redirect: false,
     })
-    expect(mockPush).toHaveBeenCalledWith('/dashboard')
   })
+  expect(mockPush).toHaveBeenCalledWith('/dashboard')
 })
 
 test('認証失敗時にエラーメッセージが表示される', async () => {
-  mockSignIn.mockRejectedValueOnce(new Error('CredentialsSignin'))
+  mockSignIn.mockResolvedValueOnce({ ok: false, error: 'CredentialsSignin', status: 401, url: null })
   render(<LoginPage />)
   fireEvent.change(screen.getByPlaceholderText('yamada@vicent.co.jp'), {
     target: { value: 'wrong@example.com' },
