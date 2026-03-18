@@ -64,6 +64,11 @@ src/app/
   layout.tsx            ← ルート layout（html/body のみに簡略化）
 ```
 
+**`<body>` クラス名の分担:**
+- ルート `src/app/layout.tsx` の `<body>`: `bg-vatch-bg text-vatch-text` のみ残す
+- `src/app/(main)/layout.tsx` のラッパー `<div>`: `flex h-screen overflow-hidden` を移動（Sidebar との flex レイアウトは `(main)` 内で完結させる）
+- `src/app/(auth)/layout.tsx` の `<body>` 相当: `flex h-screen overflow-hidden` なし（ログイン画面は独自レイアウト）
+
 **Route Groups を採用する理由:** Next.js App Router では `(groupName)` フォルダがURLに影響せず、異なる layout を適用できる。サイドバーを条件分岐で出し分けるより明確でテスタブル。
 
 ### ファイル一覧
@@ -74,7 +79,7 @@ src/app/
 | `src/app/(auth)/layout.tsx` | 新規 | サイドバーなし・全画面レイアウト |
 | `src/app/(auth)/login/page.tsx` | 新規 | ログインフォーム |
 | `src/app/(main)/layout.tsx` | 移動 | 既存 `src/app/layout.tsx` を移動 |
-| `src/app/layout.tsx` | 変更 | html/body の基盤のみ残す |
+| `src/app/layout.tsx` | 変更 | html/body の基盤のみ残す（クラス名注意：下記参照） |
 | 既存8ページ | 移動 | `src/app/` → `src/app/(main)/` 配下へ |
 
 ---
@@ -108,6 +113,7 @@ src/app/
 - `errors` の型: `{ email?: string; password?: string }`
 - バリデーション: 空フィールドチェック（クライアント側）、認証失敗はサーバー側エラーをパスワードフィールド下に表示
 - `isLoading` 中はボタンを disabled にして「ログイン中...」表示
+- **NextAuth v5 のエラー検出:** `signIn` は `try/catch` で囲む。v5 では認証失敗時に `CredentialsSignin` エラーを throw するため、`result.error` をチェックする v4 パターンは使用不可。catch されたエラーを「パスワードが正しくありません」として表示する。
 
 ### `src/middleware.ts`
 
