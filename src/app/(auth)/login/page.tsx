@@ -104,7 +104,10 @@ export default function LoginPage() {
                 }`}
               />
               {errors.email && (
-                <p className="mt-1.5 text-[10px] text-vatch-red">{errors.email}</p>
+                <p className="mt-1.5 text-[10px] text-vatch-red flex items-center gap-1">
+                  <span aria-hidden="true">⚠</span>
+                  <span>{errors.email}</span>
+                </p>
               )}
             </div>
 
@@ -123,7 +126,10 @@ export default function LoginPage() {
                 }`}
               />
               {errors.password && (
-                <p className="mt-1.5 text-[10px] text-vatch-red">{errors.password}</p>
+                <p className="mt-1.5 text-[10px] text-vatch-red flex items-center gap-1">
+                  <span aria-hidden="true">⚠</span>
+                  <span>{errors.password}</span>
+                </p>
               )}
             </div>
 
