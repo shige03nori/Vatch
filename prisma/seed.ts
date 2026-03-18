@@ -1,7 +1,9 @@
 // prisma/seed.ts
 import { PrismaClient, WorkStyle, CaseStatus, TalentStatus, EmailType, EmailStatus, MatchingStatus, ProposalStatus, ContractStatus } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 
-const prisma = new PrismaClient();
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
   console.log('🌱 シード開始...');
