@@ -3,8 +3,10 @@ import NextAuth from 'next-auth';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import Credentials from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/prisma';
+import { authConfig } from '@/auth.config';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
   // PrismaAdapter はOAuth用テーブル管理に使用。
   // Credentials + jwt strategy の組み合わせでは Session テーブルへの書き込みは行われないが、
   // Phase 3 で OAuth プロバイダーを追加する際に adapter がそのまま機能する。
@@ -35,10 +37,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   // Credentials provider には jwt strategy が必須（database strategy 不可）
   session: { strategy: 'jwt' },
-  pages: {
-    signIn: '/login',
-  },
   callbacks: {
+    ...authConfig.callbacks,
     async jwt({ token, user }) {
       if (user) {
         token.role = (user as { role: string }).role;
