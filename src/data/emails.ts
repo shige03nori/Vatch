@@ -1,0 +1,145 @@
+export type EmailStatus = 'parsed' | 'parsing' | 'error' | 'pending';
+
+export interface EmailItem {
+  id: string;
+  receivedAt: string;
+  from: string;
+  subject: string;
+  type: 'case' | 'talent';
+  status: EmailStatus;
+  skills: string[];
+  extractedName?: string;
+  confidence?: number;
+}
+
+export const emails: EmailItem[] = [
+  {
+    id: '1',
+    receivedAt: '09:42',
+    from: 'ABC商事株式会社',
+    subject: '【案件】Javaエンジニア募集 ～金融系システム開発～',
+    type: 'case',
+    status: 'parsed',
+    skills: ['Java', 'Spring Boot', 'Oracle', 'Git'],
+    extractedName: '金融系システム開発案件',
+    confidence: 94,
+  },
+  {
+    id: '2',
+    receivedAt: '09:31',
+    from: 'XYZ株式会社',
+    subject: '人材ご紹介：Reactエンジニア 田中様',
+    type: 'talent',
+    status: 'parsed',
+    skills: ['React', 'TypeScript', 'Next.js', 'GraphQL'],
+    extractedName: '田中 太郎',
+    confidence: 88,
+  },
+  {
+    id: '3',
+    receivedAt: '09:15',
+    from: '株式会社テックパートナーズ',
+    subject: '【急募】AWSインフラエンジニア案件のご紹介',
+    type: 'case',
+    status: 'parsing',
+    skills: ['AWS', 'Terraform', 'Docker'],
+    confidence: 72,
+  },
+  {
+    id: '4',
+    receivedAt: '08:59',
+    from: 'グローバルIT株式会社',
+    subject: 'エンジニアご推薦：Python/機械学習専門家',
+    type: 'talent',
+    status: 'parsed',
+    skills: ['Python', 'TensorFlow', 'scikit-learn', 'SQL'],
+    extractedName: '鈴木 花子',
+    confidence: 91,
+  },
+  {
+    id: '5',
+    receivedAt: '08:44',
+    from: '株式会社デジタルソリューションズ',
+    subject: '案件：PMO・プロジェクトマネージャー募集',
+    type: 'case',
+    status: 'error',
+    skills: [],
+    extractedName: undefined,
+    confidence: undefined,
+  },
+  {
+    id: '6',
+    receivedAt: '昨日 17:33',
+    from: 'フューチャーテック株式会社',
+    subject: 'Goエンジニア佐藤様のご紹介',
+    type: 'talent',
+    status: 'parsed',
+    skills: ['Go', 'gRPC', 'Kubernetes', 'PostgreSQL'],
+    extractedName: '佐藤 健二',
+    confidence: 85,
+  },
+  {
+    id: '7',
+    receivedAt: '昨日 15:21',
+    from: '株式会社ネクストブリッジ',
+    subject: '【案件ご紹介】製造業DXプロジェクト（要件定義～）',
+    type: 'case',
+    status: 'parsed',
+    skills: ['要件定義', 'PowerApps', 'Azure', 'SQL Server'],
+    extractedName: '製造業DX推進案件',
+    confidence: 79,
+  },
+  {
+    id: '8',
+    receivedAt: '昨日 14:05',
+    from: 'インフィニティーズ株式会社',
+    subject: 'フロントエンドエンジニア高橋様ご紹介の件',
+    type: 'talent',
+    status: 'pending',
+    skills: ['Vue.js', 'Nuxt.js', 'CSS', 'Figma'],
+    extractedName: '高橋 美咲',
+    confidence: undefined,
+  },
+  {
+    id: '9',
+    receivedAt: '昨日 11:48',
+    from: 'サクセスITパートナーズ',
+    subject: 'iOS/Androidアプリ開発案件（フルリモート）',
+    type: 'case',
+    status: 'parsed',
+    skills: ['Swift', 'Kotlin', 'Flutter', 'Firebase'],
+    extractedName: 'モバイルアプリ開発案件',
+    confidence: 96,
+  },
+  {
+    id: '10',
+    receivedAt: '昨日 10:22',
+    from: '株式会社エクセレント',
+    subject: 'データエンジニア中村様のご案内',
+    type: 'talent',
+    status: 'error',
+    skills: [],
+    confidence: undefined,
+  },
+  {
+    id: '11',
+    receivedAt: '昨日 09:07',
+    from: 'ビズテック株式会社',
+    subject: '【案件】セキュリティエンジニア募集（金融・保険）',
+    type: 'case',
+    status: 'parsing',
+    skills: ['セキュリティ', 'CISSP', 'ペネトレーション'],
+    confidence: 61,
+  },
+  {
+    id: '12',
+    receivedAt: '昨日 08:30',
+    from: 'プライムソリューション株式会社',
+    subject: 'SREエンジニア山田様ご紹介',
+    type: 'talent',
+    status: 'pending',
+    skills: ['SRE', 'Prometheus', 'Grafana', 'Linux'],
+    extractedName: '山田 竜一',
+    confidence: undefined,
+  },
+];
