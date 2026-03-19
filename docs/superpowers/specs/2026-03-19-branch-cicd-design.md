@@ -46,7 +46,7 @@ fly secrets set \
 ### 処理内容
 
 1. リポジトリを checkout
-2. `superfly/flyctl-actions/setup-flyctl@master` で flyctl をセットアップ
+2. `superfly/flyctl-actions/setup-flyctl@v1` で flyctl をセットアップ
 3. `flyctl deploy --remote-only` を実行（fly.io のリモートビルダーでビルド）
 
 ### 認証
