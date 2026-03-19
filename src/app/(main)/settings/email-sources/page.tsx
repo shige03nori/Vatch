@@ -39,7 +39,11 @@ export default function EmailSourcesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, imapPort: Number(form.imapPort) }),
       });
-      if (!res.ok) { setError('追加に失敗しました'); return; }
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => null);
+        setError(errJson?.errors?.[0]?.message ?? '追加に失敗しました');
+        return;
+      }
       setForm(emptyForm);
       await load();
     } finally {
@@ -48,17 +52,19 @@ export default function EmailSourcesPage() {
   }
 
   async function handleToggle(id: string, isActive: boolean) {
-    await fetch(`/api/email-sources/${id}`, {
+    const res = await fetch(`/api/email-sources/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ isActive: !isActive }),
     });
+    if (!res.ok) { alert('更新に失敗しました'); return; }
     await load();
   }
 
   async function handleDelete(id: string) {
     if (!confirm('削除しますか？')) return;
-    await fetch(`/api/email-sources/${id}`, { method: 'DELETE' });
+    const res = await fetch(`/api/email-sources/${id}`, { method: 'DELETE' });
+    if (!res.ok) { alert('削除に失敗しました'); return; }
     await load();
   }
 
