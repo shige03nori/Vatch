@@ -25,9 +25,9 @@ const navSections = [
   {
     label: '管理',
     links: [
+      { href: '/contracts', label: '契約・売上',   icon: '📝' },
       { href: '/overview',  label: 'システム概要', icon: '🌐' },
-      { href: '/contracts', label: '契約・売上', icon: '📝' },
-      { href: '/settings',  label: '設定',        icon: '⚙' },
+      { href: '/settings',  label: '設定',         icon: '⚙' },
     ],
   },
 ]
