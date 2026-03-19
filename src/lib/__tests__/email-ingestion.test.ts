@@ -5,6 +5,7 @@ import { runIngestion, type IngestionResult } from '../email-ingestion'
 const mockEmailCreate = jest.fn()
 const mockEmailUpdate = jest.fn()
 const mockEmailFindUnique = jest.fn()
+const mockEmailFindFirst = jest.fn()
 const mockCaseCreate = jest.fn()
 const mockTalentCreate = jest.fn()
 const mockUserFindFirst = jest.fn()
@@ -13,7 +14,7 @@ const mockEmailSourceFindMany = jest.fn()
 
 jest.mock('@/lib/prisma', () => ({
   prisma: {
-    email:       { create: (...a: unknown[]) => mockEmailCreate(...a), update: (...a: unknown[]) => mockEmailUpdate(...a), findUnique: (...a: unknown[]) => mockEmailFindUnique(...a) },
+    email:       { create: (...a: unknown[]) => mockEmailCreate(...a), update: (...a: unknown[]) => mockEmailUpdate(...a), findUnique: (...a: unknown[]) => mockEmailFindUnique(...a), findFirst: (...a: unknown[]) => mockEmailFindFirst(...a) },
     case:        { create: (...a: unknown[]) => mockCaseCreate(...a) },
     talent:      { create: (...a: unknown[]) => mockTalentCreate(...a) },
     user:        { findFirst: (...a: unknown[]) => mockUserFindFirst(...a) },
@@ -105,6 +106,8 @@ describe('runIngestion', () => {
     const result = await runIngestion()
 
     expect(result.errors).toBe(1)
+    // 1回目: status=PARSING, 2回目: status=ERROR
+    expect(mockEmailUpdate).toHaveBeenCalledTimes(2)
     expect(mockEmailUpdate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ status: 'ERROR' }),
     }))

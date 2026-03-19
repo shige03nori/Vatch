@@ -38,6 +38,21 @@ export async function runIngestion(): Promise<IngestionResult> {
       if (fetched.messageId) {
         const existing = await prisma.email.findUnique({ where: { messageId: fetched.messageId } })
         if (existing) continue
+      } else {
+        // messageId がない場合は件名+送信元+UTC受信日で重複チェック
+        const dayStart = new Date(fetched.receivedAt)
+        dayStart.setUTCHours(0, 0, 0, 0)
+        const dayEnd = new Date(dayStart)
+        dayEnd.setUTCDate(dayEnd.getUTCDate() + 1)
+
+        const existing = await prisma.email.findFirst({
+          where: {
+            fromEmail: fetched.fromEmail,
+            subject:   fetched.subject,
+            receivedAt: { gte: dayStart, lt: dayEnd },
+          },
+        })
+        if (existing) continue
       }
 
       // Email を PENDING/UNKNOWN で保存
@@ -133,6 +148,7 @@ export async function runIngestion(): Promise<IngestionResult> {
       } catch (err) {
         console.error(`[ingestion] Parse/create failed for email ${emailRecord.id}:`, err)
         await prisma.email.update({ where: { id: emailRecord.id }, data: { status: 'ERROR' } })
+        // EMAIL_PARSED タイプを使用（専用エラータイプは enum に存在しないため）
         await prisma.activityLog.create({
           data: { type: 'EMAIL_PARSED', description: `解析エラー: ${fetched.subject}`, emailId: emailRecord.id },
         })
