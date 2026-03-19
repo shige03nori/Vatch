@@ -78,6 +78,31 @@ describe('PATCH /api/cases/[id]', () => {
     const res = await PATCH(req, { params })
     expect(res.status).toBe(200)
   })
+
+  it('returns 422 when PATCH body is invalid', async () => {
+    mockAuth.mockResolvedValueOnce(adminSession)
+    mockFindUnique.mockResolvedValueOnce({ id: 'case-1', assignedUserId: 'staff-id' })
+    const req = new Request('http://localhost/api/cases/case-1', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'INVALID_STATUS' }),
+    })
+    const res = await PATCH(req, { params })
+    expect(res.status).toBe(422)
+  })
+
+  it('STAFF can patch own case', async () => {
+    mockAuth.mockResolvedValueOnce(staffSession)
+    mockFindUnique.mockResolvedValueOnce({ id: 'case-1', assignedUserId: 'staff-id' })
+    mockUpdate.mockResolvedValueOnce({ id: 'case-1', title: 'Updated by STAFF' })
+    const req = new Request('http://localhost/api/cases/case-1', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Updated by STAFF' }),
+    })
+    const res = await PATCH(req, { params })
+    expect(res.status).toBe(200)
+  })
 })
 
 describe('DELETE /api/cases/[id]', () => {
