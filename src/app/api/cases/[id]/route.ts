@@ -30,7 +30,7 @@ export async function PATCH(request: Request, { params }: Params): Promise<NextR
   const { id } = await params
   const body = await request.json().catch(() => ({}))
   const parsed = UpdateCaseSchema.safeParse(body)
-  if (!parsed.success) return unprocessable(parsed.error.errors)
+  if (!parsed.success) return unprocessable(parsed.error.issues)
 
   try {
     const existing = await prisma.case.findUnique({ where: { id } })

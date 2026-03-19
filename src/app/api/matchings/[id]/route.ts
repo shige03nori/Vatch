@@ -38,7 +38,7 @@ export async function PATCH(request: Request, { params }: Params): Promise<NextR
 
     const body = await request.json().catch(() => ({}))
     const parsed = UpdateMatchingSchema.safeParse(body)
-    if (!parsed.success) return unprocessable(parsed.error.errors)
+    if (!parsed.success) return unprocessable(parsed.error.issues)
 
     const record = await prisma.matching.update({ where: { id }, data: parsed.data })
     return ok(record)
