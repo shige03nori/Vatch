@@ -341,3 +341,13 @@ Expected: 全スイートが pass（既存テスト含む）
 git add src/app/\(main\)/overview/page.tsx src/app/\(main\)/overview/page.test.tsx
 git commit -m "feat: add system overview page with SES business flow and future vision"
 ```
+
+- [ ] **Step 7: Playwright でスクリーンショットを撮って表示を確認する**
+
+開発サーバーを起動し（`npm run dev`）、Playwright MCP でブラウザを開いて `/overview` にアクセスする。
+ログインが必要な場合は `yamada@vicent.co.jp` / `password` でログイン。
+スクリーンショットを撮って、以下を目視確認する：
+- Sidebar に「システム概要」リンクが表示されている
+- 5 つのフローステップが横並びで表示されている
+- Value Props の 4 枚のカードが表示されている
+- Phase 3 の 3 枚のカードが表示されている
