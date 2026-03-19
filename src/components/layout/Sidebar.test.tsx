@@ -17,3 +17,10 @@ test('highlights active dashboard link', () => {
   const link = screen.getByRole('link', { name: /ダッシュボード/ })
   expect(link.className).toMatch(/text-vatch-cyan/)
 })
+
+test('システム概要リンクが存在する', () => {
+  render(<Sidebar />)
+  const link = screen.getByRole('link', { name: /システム概要/ })
+  expect(link).toBeInTheDocument()
+  expect(link).toHaveAttribute('href', '/overview')
+})
