@@ -7,6 +7,7 @@ import { CreateEmailSchema, EmailQuerySchema } from '@/lib/schemas/email'
 export async function GET(request: Request): Promise<NextResponse> {
   const authResult = await requireAuth()
   if (authResult instanceof NextResponse) return authResult
+  // Email は共有受信箱（assignedUserId なし）— STAFF/ADMIN ともにフィルタなしで全件参照可
 
   const { searchParams } = new URL(request.url)
   const query = EmailQuerySchema.safeParse(Object.fromEntries(searchParams))

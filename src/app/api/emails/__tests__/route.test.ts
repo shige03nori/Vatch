@@ -70,6 +70,16 @@ describe('GET /api/emails', () => {
       expect.objectContaining({ where: expect.objectContaining({ type: 'CASE' }) })
     )
   })
+
+  it('status クエリフィルタが適用される', async () => {
+    mockAuth.mockResolvedValueOnce(adminSession)
+    mockFindMany.mockResolvedValueOnce([])
+    mockCount.mockResolvedValueOnce(0)
+    await GET(new Request('http://localhost/api/emails?status=PARSED'))
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ status: 'PARSED' }) })
+    )
+  })
 })
 
 describe('POST /api/emails', () => {
