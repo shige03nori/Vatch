@@ -55,7 +55,7 @@ fly secrets set \
 
 ### 同時実行制御
 
-`concurrency: deploy-group` を設定し、複数の push が連続した場合に同時デプロイのレースコンディションを防ぐ。
+`concurrency.group: deploy-staging` + `cancel-in-progress: true` を設定し、新しい push が来た場合に進行中のデプロイをキャンセルしてレースコンディションを防ぐ。
 
 ### ワークフローファイル
 
@@ -73,7 +73,9 @@ jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
-    concurrency: deploy-group
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
 

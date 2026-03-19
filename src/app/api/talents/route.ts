@@ -11,7 +11,7 @@ export async function GET(request: Request): Promise<NextResponse> {
 
   const { searchParams } = new URL(request.url)
   const query = TalentQuerySchema.safeParse(Object.fromEntries(searchParams))
-  if (!query.success) return unprocessable(query.error.errors)
+  if (!query.success) return unprocessable(query.error.issues)
 
   const { status, skills, workStyle, page, limit } = query.data
   const skillsArr = skills ? skills.split(',').map(s => s.trim()) : undefined
@@ -41,7 +41,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const body = await request.json().catch(() => ({}))
   const parsed = CreateTalentSchema.safeParse(body)
-  if (!parsed.success) return unprocessable(parsed.error.errors)
+  if (!parsed.success) return unprocessable(parsed.error.issues)
 
   const data = {
     ...parsed.data,
