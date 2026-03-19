@@ -23,7 +23,7 @@ export async function PATCH(request: Request, { params }: Params): Promise<NextR
     const { imapPass, ...rest } = parsed.data
     const data = {
       ...rest,
-      ...(imapPass ? { imapPass: encrypt(imapPass, ENCRYPTION_KEY) } : {}),
+      ...(imapPass !== undefined ? { imapPass: encrypt(imapPass, ENCRYPTION_KEY) } : {}),
     }
     const record = await prisma.emailSource.update({ where: { id }, data })
     const { imapPass: _, ...safeRecord } = record
@@ -42,7 +42,15 @@ export async function DELETE(_request: Request, { params }: Params): Promise<Nex
   try {
     await prisma.emailSource.delete({ where: { id } })
     return ok({ deleted: true })
-  } catch {
-    return notFound()
+  } catch (err: unknown) {
+    // Prismaの「レコードが見つからない」エラー（P2025）のみ404
+    if (
+      err instanceof Error &&
+      'code' in err &&
+      (err as { code: string }).code === 'P2025'
+    ) {
+      return notFound()
+    }
+    return serverError()
   }
 }
