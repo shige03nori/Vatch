@@ -1,6 +1,4 @@
-/**
- * @jest-environment node
- */
+/** @jest-environment node */
 import { GET, POST } from '../route'
 
 const mockFindMany = jest.fn()

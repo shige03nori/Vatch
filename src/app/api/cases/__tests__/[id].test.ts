@@ -1,6 +1,4 @@
-/**
- * @jest-environment node
- */
+/** @jest-environment node */
 import { GET, PATCH, DELETE } from '../[id]/route'
 
 const mockFindUnique = jest.fn()
