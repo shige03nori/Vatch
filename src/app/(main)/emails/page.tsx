@@ -102,7 +102,9 @@ function EmailRow({ item, onDetail }: { item: EmailItem; onDetail: (id: string) 
     <tr className="border-b border-vatch-border hover:bg-vatch-surface/60 transition-colors">
       {/* 受信時刻 */}
       <td className="px-4 py-3 whitespace-nowrap">
-        <span className="text-[12px] text-vatch-muted font-mono">{item.receivedAt}</span>
+        <span className="text-[12px] text-vatch-muted font-mono">
+          {new Date(item.receivedAt).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+        </span>
       </td>
 
       {/* タイプ */}
@@ -183,6 +185,7 @@ export default function EmailsPage() {
     setLoading(true);
     try {
       const res = await fetch('/api/emails?limit=100');
+      if (!res.ok) return;  // エラー時は空のまま（画面には「0件」が表示される）
       const json = await res.json();
       if (json.success) setEmails(json.data);
     } finally {
@@ -195,7 +198,11 @@ export default function EmailsPage() {
   async function handleFetchNow() {
     setFetching(true);
     try {
-      await fetch('/api/emails/fetch', { method: 'POST' });
+      const res = await fetch('/api/emails/fetch', { method: 'POST' });
+      if (!res.ok) {
+        alert('メール取込に失敗しました。管理者権限が必要です。');
+        return;
+      }
       await loadEmails();
     } finally {
       setFetching(false);
