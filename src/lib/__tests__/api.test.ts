@@ -3,7 +3,11 @@
  */
 jest.mock('../auth', () => ({ auth: jest.fn() }))
 
-import { ok, created, unauthorized, forbidden, notFound, unprocessable, serverError } from '../api'
+import { NextResponse } from 'next/server'
+import { ok, created, unauthorized, forbidden, notFound, unprocessable, serverError, requireAuth } from '../api'
+import { auth as mockAuthFn } from '../auth'
+
+const mockAuth = mockAuthFn as jest.Mock
 
 describe('api helpers', () => {
   it('ok returns 200 with data', async () => {
@@ -55,5 +59,32 @@ describe('api helpers', () => {
   it('serverError returns 500', async () => {
     const res = serverError()
     expect(res.status).toBe(500)
+  })
+})
+
+describe('requireAuth', () => {
+  it('returns 401 when no session', async () => {
+    mockAuth.mockResolvedValueOnce(null)
+    const result = await requireAuth()
+    expect(result).toBeInstanceOf(NextResponse)
+    // @ts-expect-error - result is NextResponse here
+    expect(result.status).toBe(401)
+  })
+
+  it('returns session and isAdmin=true for ADMIN', async () => {
+    const session = { user: { id: 'u1', role: 'ADMIN' } }
+    mockAuth.mockResolvedValueOnce(session)
+    const result = await requireAuth()
+    expect(result).not.toBeInstanceOf(NextResponse)
+    const { isAdmin } = result as { session: typeof session; isAdmin: boolean }
+    expect(isAdmin).toBe(true)
+  })
+
+  it('returns isAdmin=false for STAFF', async () => {
+    const session = { user: { id: 'u1', role: 'STAFF' } }
+    mockAuth.mockResolvedValueOnce(session)
+    const result = await requireAuth()
+    const { isAdmin } = result as { session: typeof session; isAdmin: boolean }
+    expect(isAdmin).toBe(false)
   })
 })
