@@ -11,7 +11,7 @@ export async function GET(request: Request): Promise<NextResponse> {
 
   const { searchParams } = new URL(request.url)
   const query = ProposalQuerySchema.safeParse(Object.fromEntries(searchParams))
-  if (!query.success) return unprocessable(query.error.errors)
+  if (!query.success) return unprocessable(query.error.issues)
 
   const { status, page, limit } = query.data
 
@@ -37,7 +37,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const body = await request.json().catch(() => ({}))
   const parsed = CreateProposalSchema.safeParse(body)
-  if (!parsed.success) return unprocessable(parsed.error.errors)
+  if (!parsed.success) return unprocessable(parsed.error.issues)
 
   try {
     const record = await prisma.proposal.create({ data: parsed.data })
