@@ -1,5 +1,6 @@
 // src/lib/auth.ts
 import NextAuth from 'next-auth';
+import type { Role } from '@prisma/client';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import Credentials from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/prisma';
@@ -50,7 +51,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.id = token.sub;
       }
       if (token.role) {
-        session.user.role = token.role as import('@prisma/client').Role;
+        session.user.role = token.role as Role;
       }
       return session;
     },
