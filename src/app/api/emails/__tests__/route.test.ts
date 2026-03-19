@@ -49,6 +49,27 @@ describe('GET /api/emails', () => {
       expect.objectContaining({ where: expect.not.objectContaining({ assignedUserId: expect.anything() }) })
     )
   })
+
+  it('ADMIN: 全件一覧 200', async () => {
+    mockAuth.mockResolvedValueOnce(adminSession)
+    mockFindMany.mockResolvedValueOnce([{ id: 'e1' }])
+    mockCount.mockResolvedValueOnce(1)
+    const res = await GET(new Request('http://localhost/api/emails'))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.success).toBe(true)
+    expect(body.meta.total).toBe(1)
+  })
+
+  it('type クエリフィルタが適用される', async () => {
+    mockAuth.mockResolvedValueOnce(adminSession)
+    mockFindMany.mockResolvedValueOnce([])
+    mockCount.mockResolvedValueOnce(0)
+    await GET(new Request('http://localhost/api/emails?type=CASE'))
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ type: 'CASE' }) })
+    )
+  })
 })
 
 describe('POST /api/emails', () => {
