@@ -1,9 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Topbar } from '@/components/layout/Topbar';
-import { emails } from '@/data/emails';
-import type { EmailItem, EmailStatus } from '@/data/emails';
+
+type EmailStatus = 'PENDING' | 'PARSING' | 'PARSED' | 'ERROR';
+
+type EmailItem = {
+  id: string;
+  receivedAt: string;
+  from: string;
+  subject: string;
+  type: 'CASE' | 'TALENT' | 'UNKNOWN';
+  status: EmailStatus;
+  skills: string[];
+  extractedName: string | null;
+  confidence: number | null;
+};
 
 type FilterTab = 'all' | 'case' | 'talent' | 'error';
 
@@ -16,26 +28,26 @@ const filterTabs: { key: FilterTab; label: string }[] = [
 
 function StatusBadge({ status }: { status: EmailStatus }) {
   switch (status) {
-    case 'parsed':
+    case 'PARSED':
       return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-vatch-green/10 text-vatch-green border border-vatch-green/30">
           完了
         </span>
       );
-    case 'parsing':
+    case 'PARSING':
       return (
         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-vatch-amber/10 text-vatch-amber border border-vatch-amber/30 animate-pulse">
           <span className="w-1.5 h-1.5 rounded-full bg-vatch-amber" />
           解析中
         </span>
       );
-    case 'error':
+    case 'ERROR':
       return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-vatch-red/10 text-vatch-red border border-vatch-red/30">
           エラー
         </span>
       );
-    case 'pending':
+    case 'PENDING':
       return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-vatch-muted/10 text-vatch-muted border border-vatch-muted/30">
           待機中
@@ -45,16 +57,23 @@ function StatusBadge({ status }: { status: EmailStatus }) {
 }
 
 function TypeBadge({ type }: { type: EmailItem['type'] }) {
-  if (type === 'case') {
+  if (type === 'CASE') {
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-vatch-cyan/10 text-vatch-cyan border border-vatch-cyan/30">
         案件
       </span>
     );
   }
+  if (type === 'TALENT') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-vatch-purple/10 text-vatch-purple border border-vatch-purple/30">
+        人材
+      </span>
+    );
+  }
   return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-vatch-purple/10 text-vatch-purple border border-vatch-purple/30">
-      人材
+    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-vatch-muted/10 text-vatch-muted border border-vatch-muted/30">
+      不明
     </span>
   );
 }
@@ -134,7 +153,7 @@ function EmailRow({ item, onDetail }: { item: EmailItem; onDetail: (id: string) 
 
       {/* AI信頼度 */}
       <td className="px-4 py-3 min-w-[120px]">
-        {item.confidence !== undefined ? (
+        {item.confidence !== null ? (
           <ConfidenceBar confidence={item.confidence} />
         ) : (
           <span className="text-[11px] text-vatch-muted">—</span>
@@ -156,26 +175,48 @@ function EmailRow({ item, onDetail }: { item: EmailItem; onDetail: (id: string) 
 
 export default function EmailsPage() {
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
+  const [emails, setEmails] = useState<EmailItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fetching, setFetching] = useState(false);
+
+  async function loadEmails() {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/emails?limit=100');
+      const json = await res.json();
+      if (json.success) setEmails(json.data);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { loadEmails(); }, []);
+
+  async function handleFetchNow() {
+    setFetching(true);
+    try {
+      await fetch('/api/emails/fetch', { method: 'POST' });
+      await loadEmails();
+    } finally {
+      setFetching(false);
+    }
+  }
 
   const filtered = emails.filter((email) => {
     if (activeTab === 'all')    return true;
-    if (activeTab === 'error')  return email.status === 'error';
-    return email.type === activeTab;
+    if (activeTab === 'error')  return email.status === 'ERROR';
+    return email.type === activeTab.toUpperCase();
   });
 
   const counts = {
     all:    emails.length,
-    case:   emails.filter((e) => e.type === 'case').length,
-    talent: emails.filter((e) => e.type === 'talent').length,
-    error:  emails.filter((e) => e.status === 'error').length,
+    case:   emails.filter((e) => e.type === 'CASE').length,
+    talent: emails.filter((e) => e.type === 'TALENT').length,
+    error:  emails.filter((e) => e.status === 'ERROR').length,
   };
 
   function handleDetail(id: string) {
     alert(`詳細: メールID ${id}`);
-  }
-
-  function handleFetchNow() {
-    alert('メール取込を開始しました');
   }
 
   return (
@@ -192,12 +233,13 @@ export default function EmailsPage() {
           </div>
           <button
             onClick={handleFetchNow}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-vatch-cyan text-vatch-bg font-semibold text-sm hover:bg-vatch-cyan/90 transition-colors"
+            disabled={fetching}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-vatch-cyan text-vatch-bg font-semibold text-sm hover:bg-vatch-cyan/90 transition-colors disabled:opacity-60"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            今すぐ取込
+            {fetching ? '取込中...' : '今すぐ取込'}
           </button>
         </div>
 
@@ -242,7 +284,15 @@ export default function EmailsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.length > 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan={8}>
+                      <div className="flex items-center justify-center py-16 text-vatch-muted text-sm">
+                        読み込み中...
+                      </div>
+                    </td>
+                  </tr>
+                ) : filtered.length > 0 ? (
                   filtered.map((item) => (
                     <EmailRow key={item.id} item={item} onDetail={handleDetail} />
                   ))
@@ -262,16 +312,16 @@ export default function EmailsPage() {
             <span className="text-[12px] text-vatch-muted">{filtered.length} 件表示</span>
             <div className="flex items-center gap-3 text-[11px] text-vatch-muted">
               <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-vatch-green" /> 完了: {emails.filter(e => e.status === 'parsed').length}件
+                <span className="w-2 h-2 rounded-full bg-vatch-green" /> 完了: {emails.filter(e => e.status === 'PARSED').length}件
               </span>
               <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-vatch-amber" /> 解析中: {emails.filter(e => e.status === 'parsing').length}件
+                <span className="w-2 h-2 rounded-full bg-vatch-amber" /> 解析中: {emails.filter(e => e.status === 'PARSING').length}件
               </span>
               <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-vatch-red" /> エラー: {emails.filter(e => e.status === 'error').length}件
+                <span className="w-2 h-2 rounded-full bg-vatch-red" /> エラー: {emails.filter(e => e.status === 'ERROR').length}件
               </span>
               <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-vatch-muted" /> 待機: {emails.filter(e => e.status === 'pending').length}件
+                <span className="w-2 h-2 rounded-full bg-vatch-muted" /> 待機: {emails.filter(e => e.status === 'PENDING').length}件
               </span>
             </div>
           </div>
