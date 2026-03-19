@@ -24,7 +24,7 @@ async function main() {
   const adminUser = await prisma.user.create({
     data: {
       name: '山田 太郎',
-      email: 'yamada@vicent.co.jp',
+      email: 's.nita@vicent.co.jp',
       role: 'ADMIN',
     },
   });
@@ -164,7 +164,7 @@ async function main() {
     data: {
       matchingId: matching2.id,
       to: 'saiyou@alpha-commerce.co.jp',
-      cc: 'yamada@vicent.co.jp',
+      cc: 's.nita@vicent.co.jp',
       subject: '【ご提案】Reactエンジニア ご紹介の件',
       bodyText: `株式会社アルファコマース 採用担当 様
 
