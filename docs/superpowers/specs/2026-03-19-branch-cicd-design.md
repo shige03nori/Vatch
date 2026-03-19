@@ -20,6 +20,23 @@
 
 ---
 
+## デプロイ前提条件（初回のみ）
+
+`flyctl deploy` 実行前に、fly.io アプリ側に必要な環境変数をシークレットとして設定しておく必要がある。
+設定されていない場合、ビルドまたは起動時にクラッシュする。
+
+```bash
+fly secrets set \
+  DATABASE_URL="postgresql://..." \
+  NEXTAUTH_SECRET="..." \
+  NEXTAUTH_URL="https://vatch.fly.dev" \
+  --app vatch
+```
+
+設定済みシークレットの確認: `fly secrets list --app vatch`
+
+---
+
 ## GitHub Actions ワークフロー
 
 ### トリガー
@@ -30,11 +47,15 @@
 
 1. リポジトリを checkout
 2. `superfly/flyctl-actions/setup-flyctl@master` で flyctl をセットアップ
-3. `fly deploy --remote-only` を実行（fly.io のリモートビルダーでビルド）
+3. `flyctl deploy --remote-only` を実行（fly.io のリモートビルダーでビルド）
 
 ### 認証
 
 `FLY_API_TOKEN` を GitHub Secrets から `secrets.FLY_API_TOKEN` として参照。
+
+### 同時実行制御
+
+`concurrency: deploy-group` を設定し、複数の push が連続した場合に同時デプロイのレースコンディションを防ぐ。
 
 ### ワークフローファイル
 
@@ -52,12 +73,13 @@ jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
+    concurrency: deploy-group
     steps:
       - uses: actions/checkout@v4
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - run: fly deploy --remote-only
+      - run: flyctl deploy --remote-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 ```
