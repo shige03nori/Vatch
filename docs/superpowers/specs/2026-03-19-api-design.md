@@ -61,6 +61,8 @@ src/
 }
 ```
 
+`meta.total` は同一フィルタ条件で `prisma.model.count()` を実行した値。
+
 ### 成功（単件・作成）
 
 ```json
@@ -72,6 +74,16 @@ src/
 ```json
 { "success": false, "error": { "code": "VALIDATION_ERROR", "message": "..." } }
 ```
+
+### エラーコード一覧
+
+| code | HTTP | 用途 |
+|---|---|---|
+| `UNAUTHORIZED` | 401 | 未認証（セッションなし） |
+| `FORBIDDEN` | 403 | 権限なし（ロール不足・他人のリソース） |
+| `NOT_FOUND` | 404 | リソースが存在しない |
+| `VALIDATION_ERROR` | 422 | Zod バリデーション失敗 |
+| `SERVER_ERROR` | 500 | 予期しないサーバーエラー |
 
 ### HTTPステータスコード
 
@@ -95,16 +107,22 @@ src/
 // レスポンスヘルパー
 export function ok(data: unknown, meta?: PaginationMeta): NextResponse
 export function created(data: unknown): NextResponse
-export function unauthorized(): NextResponse        // 401
-export function forbidden(): NextResponse           // 403
-export function notFound(): NextResponse            // 404
-export function unprocessable(errors: unknown): NextResponse  // 422
-export function serverError(): NextResponse         // 500
+export function unauthorized(): NextResponse        // 401 UNAUTHORIZED
+export function forbidden(): NextResponse           // 403 FORBIDDEN
+export function notFound(): NextResponse            // 404 NOT_FOUND
+export function unprocessable(errors: unknown): NextResponse  // 422 VALIDATION_ERROR
+export function serverError(): NextResponse         // 500 SERVER_ERROR
 
 // 認証チェック
-// セッションがなければ 401 NextResponse を throw
+// セッションがなければ unauthorized() を返す（throw ではなく return）
 // 成功時は { session, isAdmin } を返す
-export async function requireAuth(): Promise<{ session: Session; isAdmin: boolean }>
+// Handler 側は instanceof NextResponse で早期 return するパターンを使う:
+//
+//   const authResult = await requireAuth()
+//   if (authResult instanceof NextResponse) return authResult
+//   const { session, isAdmin } = authResult
+//
+export async function requireAuth(): Promise<{ session: Session; isAdmin: boolean } | NextResponse>
 
 // ページネーション
 export type PaginationMeta = { total: number; page: number; limit: number }
@@ -117,7 +135,9 @@ export type PaginationMeta = { total: number; page: number; limit: number }
 すべての Route Handler で `requireAuth()` を呼び出す。
 
 ```ts
-const { session, isAdmin } = await requireAuth()
+const authResult = await requireAuth()
+if (authResult instanceof NextResponse) return authResult
+const { session, isAdmin } = authResult
 ```
 
 ### ロール制御
@@ -126,12 +146,25 @@ const { session, isAdmin } = await requireAuth()
 |---|---|---|
 | 一覧取得 | `assignedUserId === 自分` のみ | 全件 |
 | 詳細取得 | 自分担当のみ（他人は 403） | 全件 |
-| 作成 | 自分の `assignedUserId` で作成 | 任意ユーザーで作成可 |
+| 作成 | 自分の `assignedUserId` で強制設定 | リクエストボディの `assignedUserId` を使用 |
 | 更新 | 自分担当のみ | 全件 |
 | 削除 | 不可（403） | 全件 |
 
-※ Matching/Proposal/Contract は担当者ベースではなく関連する Case の担当者で判定する。
-※ Email はシステム取込なのでロール制御は軽量（STAFF は参照のみ、ADMIN は全操作）。
+**担当者判定の基準（リソース別）:**
+
+| リソース | 担当者フィールド |
+|---|---|
+| Case | `Case.assignedUserId` |
+| Talent | `Talent.assignedUserId` |
+| Matching | 関連する `Case.assignedUserId`（`matching.case.assignedUserId`） |
+| Proposal | 関連する `Matching.case.assignedUserId`（`proposal.matching.case.assignedUserId`） |
+| Contract | `Contract.assignedUserId`（Contract 自身が持つフィールドを使用。Case のフィールドは参照しない） |
+| Email | 下記参照 |
+
+**Email のロール制御（特殊ルール）:**
+- STAFF: GET（一覧・詳細）のみ許可。POST/PATCH/DELETE は 403。
+- ADMIN: 全操作（GET/POST/PATCH/DELETE）許可。
+- Email はシステム取込を想定した設計だが、このフェーズではユーザーセッション認証で制御する。
 
 ---
 
@@ -166,7 +199,7 @@ const { session, isAdmin } = await requireAuth()
 | メソッド | パス | 説明 |
 |---|---|---|
 | GET | `/api/matchings` | 一覧（caseId/talentId/status/page/limit） |
-| POST | `/api/matchings` | 作成（スコア計算含む） |
+| POST | `/api/matchings` | 作成（スコアフィールドは全てリクエストボディで手動入力） |
 | GET | `/api/matchings/[id]` | 詳細（case, talent, proposal を include） |
 | PATCH | `/api/matchings/[id]` | ステータス更新 |
 | DELETE | `/api/matchings/[id]` | 削除（ADMIN のみ） |
@@ -179,7 +212,9 @@ const { session, isAdmin } = await requireAuth()
 | POST | `/api/proposals` | 作成（matchingId 必須） |
 | GET | `/api/proposals/[id]` | 詳細 |
 | PATCH | `/api/proposals/[id]` | 更新（送信・ステータス変更） |
-| DELETE | `/api/proposals/[id]` | 削除（DRAFT のみ可） |
+| DELETE | `/api/proposals/[id]` | 削除（ADMIN のみ・DRAFT ステータスのみ） |
+
+※ DELETE は ADMIN であっても DRAFT 以外のステータス（SENT/REPLIED 等）の Proposal は削除不可（422 を返す）。
 
 ### Contract（契約）
 
@@ -196,27 +231,30 @@ const { session, isAdmin } = await requireAuth()
 | メソッド | パス | 説明 |
 |---|---|---|
 | GET | `/api/emails` | 一覧（type/status/page/limit） |
-| POST | `/api/emails` | 取込（メール受信時） |
+| POST | `/api/emails` | 取込（ADMIN のみ） |
 | GET | `/api/emails/[id]` | 詳細 |
-| PATCH | `/api/emails/[id]` | ステータス更新（PARSING→PARSED） |
+| PATCH | `/api/emails/[id]` | ステータス更新（ADMIN のみ） |
 | DELETE | `/api/emails/[id]` | 削除（ADMIN のみ） |
 
 ---
 
-## Zod スキーマ設計（Case を例）
+## Zod スキーマ設計
+
+### Case
 
 ```ts
 // src/lib/schemas/case.ts
 
 export const CreateCaseSchema = z.object({
-  title:     z.string().min(1),
-  client:    z.string().min(1),
-  clientEmail: z.string().email().optional(),
-  skills:    z.array(z.string()).min(1),
-  unitPrice: z.number().positive(),
-  startDate: z.coerce.date(),
-  workStyle: z.enum(['REMOTE', 'ONSITE', 'HYBRID']),
-  sourceEmailId: z.string().optional(),
+  title:          z.string().min(1),
+  client:         z.string().min(1),
+  clientEmail:    z.string().email().optional(),
+  skills:         z.array(z.string()).min(1),
+  unitPrice:      z.number().int().positive(),
+  startDate:      z.coerce.date(),
+  workStyle:      z.enum(['REMOTE', 'ONSITE', 'HYBRID']),
+  assignedUserId: z.string().cuid(),   // STAFF は API 内で自分の ID に強制上書き
+  sourceEmailId:  z.string().cuid().optional(),
 })
 
 export const UpdateCaseSchema = CreateCaseSchema.partial().extend({
@@ -233,7 +271,164 @@ export const CaseQuerySchema = z.object({
 })
 ```
 
-他リソースも同様のパターン（Create/Update/Query の3スキーマ）。
+### Talent
+
+```ts
+// src/lib/schemas/talent.ts
+
+export const CreateTalentSchema = z.object({
+  name:           z.string().min(1),
+  skills:         z.array(z.string()).min(1),
+  experience:     z.number().int().min(0),
+  desiredRate:    z.number().int().positive(),
+  location:       z.string().min(1),
+  workStyle:      z.enum(['REMOTE', 'ONSITE', 'HYBRID']),
+  availableFrom:  z.coerce.date().optional(),
+  agencyEmail:    z.string().email().optional(),
+  assignedUserId: z.string().cuid(),   // STAFF は API 内で自分の ID に強制上書き
+  sourceEmailId:  z.string().cuid().optional(),
+})
+
+export const UpdateTalentSchema = CreateTalentSchema.partial().extend({
+  status: z.enum(['AVAILABLE','ACTIVE','NEGOTIATING','ENDING_SOON','INACTIVE']).optional(),
+})
+
+export const TalentQuerySchema = z.object({
+  status:    z.enum(['AVAILABLE','ACTIVE','NEGOTIATING','ENDING_SOON','INACTIVE']).optional(),
+  skills:    z.string().optional(),
+  workStyle: z.enum(['REMOTE', 'ONSITE', 'HYBRID']).optional(),
+  page:      z.coerce.number().min(1).default(1),
+  limit:     z.coerce.number().min(1).max(100).default(20),
+})
+```
+
+### Matching
+
+```ts
+// src/lib/schemas/matching.ts
+// スコアフィールドは全てリクエストボディで手動入力（AI計算はスコープ外）
+
+export const CreateMatchingSchema = z.object({
+  caseId:          z.string().cuid(),
+  talentId:        z.string().cuid(),
+  score:           z.number().int().min(0).max(100),
+  skillMatchRate:  z.number().int().min(0).max(100),
+  unitPriceOk:     z.boolean(),
+  timingOk:        z.boolean(),
+  locationOk:      z.boolean(),
+  costPrice:       z.number().int().positive(),
+  sellPrice:       z.number().int().positive(),
+  grossProfitRate: z.number(),
+  grossProfitOk:   z.boolean(),
+  reason:          z.string().optional(),
+  isAutoSend:      z.boolean().default(false),
+})
+
+export const UpdateMatchingSchema = z.object({
+  status: z.enum(['UNPROPOSED','PENDING_AUTO','SENT','REPLIED','INTERVIEWING','CONTRACTED','REJECTED']),
+})
+
+export const MatchingQuerySchema = z.object({
+  caseId:   z.string().cuid().optional(),
+  talentId: z.string().cuid().optional(),
+  status:   z.enum(['UNPROPOSED','PENDING_AUTO','SENT','REPLIED','INTERVIEWING','CONTRACTED','REJECTED']).optional(),
+  page:     z.coerce.number().min(1).default(1),
+  limit:    z.coerce.number().min(1).max(100).default(20),
+})
+```
+
+### Proposal
+
+```ts
+// src/lib/schemas/proposal.ts
+
+export const CreateProposalSchema = z.object({
+  matchingId:      z.string().cuid(),
+  to:              z.string().email(),
+  cc:              z.string().email().optional(),
+  subject:         z.string().min(1),
+  bodyText:        z.string().min(1),
+  costPrice:       z.number().int().positive(),
+  sellPrice:       z.number().int().positive(),
+  grossProfitRate: z.number(),
+  isAutoSend:      z.boolean().default(false),
+})
+
+export const UpdateProposalSchema = z.object({
+  status:  z.enum(['DRAFT','PENDING_AUTO','SENT','REPLIED','REJECTED']).optional(),
+  subject: z.string().min(1).optional(),
+  bodyText: z.string().min(1).optional(),
+  sentAt:  z.coerce.date().optional(),
+})
+
+export const ProposalQuerySchema = z.object({
+  status: z.enum(['DRAFT','PENDING_AUTO','SENT','REPLIED','REJECTED']).optional(),
+  page:   z.coerce.number().min(1).default(1),
+  limit:  z.coerce.number().min(1).max(100).default(20),
+})
+```
+
+### Contract
+
+```ts
+// src/lib/schemas/contract.ts
+
+export const CreateContractSchema = z.object({
+  caseId:          z.string().cuid(),
+  talentId:        z.string().cuid(),
+  assignedUserId:  z.string().cuid(),
+  proposalId:      z.string().cuid().optional(),
+  startDate:       z.coerce.date(),
+  endDate:         z.coerce.date().optional(),
+  unitPrice:       z.number().int().positive(),
+  costPrice:       z.number().int().positive(),
+  grossProfitRate: z.number(),
+})
+
+export const UpdateContractSchema = z.object({
+  endDate:         z.coerce.date().optional(),
+  unitPrice:       z.number().int().positive().optional(),
+  costPrice:       z.number().int().positive().optional(),
+  grossProfitRate: z.number().optional(),
+  status:          z.enum(['ACTIVE','ENDING_SOON','ENDED','RENEWAL_PENDING']).optional(),
+})
+
+export const ContractQuerySchema = z.object({
+  status: z.enum(['ACTIVE','ENDING_SOON','ENDED','RENEWAL_PENDING']).optional(),
+  page:   z.coerce.number().min(1).default(1),
+  limit:  z.coerce.number().min(1).max(100).default(20),
+})
+```
+
+### Email
+
+```ts
+// src/lib/schemas/email.ts
+
+export const CreateEmailSchema = z.object({
+  receivedAt:    z.coerce.date(),
+  from:          z.string().min(1),
+  fromEmail:     z.string().email(),
+  subject:       z.string().min(1),
+  bodyText:      z.string(),
+  type:          z.enum(['CASE', 'TALENT']),
+  skills:        z.array(z.string()).default([]),
+  extractedName: z.string().optional(),
+  confidence:    z.number().int().min(0).max(100).optional(),
+  s3Key:         z.string().optional(),
+})
+
+export const UpdateEmailSchema = z.object({
+  status: z.enum(['PENDING','PARSING','PARSED','ERROR']),
+})
+
+export const EmailQuerySchema = z.object({
+  type:   z.enum(['CASE', 'TALENT']).optional(),
+  status: z.enum(['PENDING','PARSING','PARSED','ERROR']).optional(),
+  page:   z.coerce.number().min(1).default(1),
+  limit:  z.coerce.number().min(1).max(100).default(20),
+})
+```
 
 ---
 
@@ -260,17 +455,20 @@ src/app/api/
 | 未認証リクエスト | 401 を返す |
 | STAFF が他人のデータを取得 | 403 を返す |
 | STAFF が DELETE | 403 を返す |
+| STAFF が Email の POST/PATCH | 403 を返す |
 | 正常な一覧取得 | 200 + `{ success: true, data, meta }` |
 | バリデーションエラー | 422 + エラー詳細 |
 | 存在しない ID | 404 を返す |
 | 正常な作成 | 201 + 作成データ |
 | 正常な更新 | 200 + 更新データ |
+| Proposal 削除（DRAFT） | ADMIN: 200 |
+| Proposal 削除（SENT） | 422 を返す |
 
 ### モック設定
 
 ```ts
 jest.mock('@/lib/prisma', () => ({
-  prisma: { case: { findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), ... } }
+  prisma: { case: { findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), count: jest.fn(), ... } }
 }))
 jest.mock('@/lib/auth', () => ({ auth: jest.fn() }))
 ```
@@ -293,6 +491,6 @@ jest.mock('@/lib/auth', () => ({ auth: jest.fn() }))
 ## 対象外（スコープ外）
 
 - メール送信機能（Proposal の実際の送信）
-- AI スコアリングロジック（Matching の score 計算は手動入力）
+- AI スコアリングロジック（Matching の score は全フィールド手動入力）
 - WebSocket / リアルタイム更新
 - ファイルアップロード（Email の添付ファイル）
