@@ -6,35 +6,58 @@
 
 **配置:** サイドバーの「管理」セクションに「システム概要」メニューを追加し、`/overview` ページへ遷移する。
 
-**対象デバイス:** デスクトップ専用（デモ用途のため、モバイル対応は対象外）。
+**対象デバイス:** デスクトップ専用（デモ用途のため、モバイル対応は対象外。最小ビューポート幅: 1280px 想定）。
 
 ---
 
 ## ページ構成
 
-### 1. ヘッダー
+### ページの基本構造
 
-- タイトル: `VATCH システム概要`
-- サブタイトル: `SES業務のエンドツーエンド自動化プラットフォーム`
-- 右側: `Phase 1 稼働中` バッジ — `bg-green-500` ドットに Tailwind `animate-ping` で点滅させる
+既存ページ（例: `dashboard/page.tsx`）と同じ構造に従う：
+
+```tsx
+export default function OverviewPage() {
+  return (
+    <>
+      <Topbar title="システム概要" subtitle="SES業務のエンドツーエンド自動化プラットフォーム" />
+      <main className="flex-1 overflow-y-auto overflow-x-auto p-6 flex flex-col gap-6">
+        {/* コンテンツ */}
+      </main>
+    </>
+  )
+}
+```
+
+`(main)/layout.tsx` は Sidebar のみ自動適用。**Topbar は各ページが自前で `<Topbar />` をレンダリングする**（layout には含まれない）。
+
+---
+
+### 1. ページヘッダー
+
+Topbar の `title` / `subtitle` prop で表示：
+- `title`: `"システム概要"`
+- `subtitle`: `"SES業務のエンドツーエンド自動化プラットフォーム"`
+
+Topbar 右側の `LIVE` バッジ（`animate-pulse`）は既存コンポーネントが自動表示するため追加実装不要。
 
 ---
 
 ### 2. 凡例（Legend）
 
-3種類のステータスを色ドットで説明する小バー（ページ上部に配置）。
+3種類のステータスを色ドットで説明する小バー。`bg-vatch-surface border border-vatch-border` のカード内に横並び。
 
-| ドット色 | Tailwindクラス | 意味 |
-|---------|--------------|------|
-| 🟢 緑 | `bg-green-400` | 実装済み |
-| 🟡 黄 | `bg-amber-400` | 開発中（Phase 2） |
-| 🟣 紫 | `bg-violet-400` | 将来予定（Phase 3） |
+| ドット Tailwindクラス | 意味 |
+|----------------------|------|
+| `bg-green-400` | 実装済み |
+| `bg-amber-400` | 開発中（Phase 2） |
+| `bg-violet-400` | 将来予定（Phase 3） |
 
 ---
 
 ### 3. SES ビジネスフロー
 
-横並び 5 ステップを矢印（→）で接続。`overflow-x: auto` で横スクロール対応。各ステップは固定幅カード（約 `w-44`）。
+横並び 5 ステップを矢印（`→`）で接続。ラッパーに `overflow-x-auto` を付与。各ステップは固定幅カード（`w-44`）。
 
 | # | アイコン | ステップ名 | サブタイトル | 機能リスト |
 |---|---------|----------|------------|-----------|
@@ -48,7 +71,7 @@
 
 ### 4. システムが実現する価値（Value Props）
 
-4 枚の数値カードを `grid-cols-4` で横並び（デスクトップ専用のため固定）。
+4 枚の数値カードを `grid-cols-4` で横並び（デスクトップ固定）。
 
 | 数値 | 説明 |
 |-----|------|
@@ -57,7 +80,7 @@
 | **0件** | 見落とし（アラート自動通知） |
 | **全データ** | 案件・人材・契約を一元管理 |
 
-数値テキストは `text-amber-400`、説明テキストは `text-slate-500`。
+数値テキストは `text-amber-400 text-3xl font-bold`、説明テキストは `text-slate-500 text-xs mt-1`。
 
 ---
 
@@ -71,25 +94,20 @@
 | 📊 高度分析ダッシュボード | 成約率・単価・担当者パフォーマンスをリアルタイム分析。経営判断に直結するインサイト。 | `Analytics` |
 | 🔗 外部システム連携 | Slack / 会計 / 電子契約とのAPI連携で既存業務フローに統合。 | `Integration` |
 
-タグは `bg-indigo-950 text-indigo-400` の pill スタイル。
+タグは `bg-indigo-950 text-indigo-400 text-[10px] px-2 py-0.5 rounded-full` の pill スタイル。
 
 ---
 
 ## サイドバー変更
 
-`src/components/layout/Sidebar.tsx` の `navSections` にある `管理` セクションに、`設定` の前に追加する：
+`src/components/layout/Sidebar.tsx` の `navSections` にある `管理` セクションに、`設定` の直前に追加する。アイコンは `'🌐'`（シングルコードポイントの地球絵文字）を使用：
 
-```ts
-{ href: '/overview', label: 'システム概要', icon: '🗺' }
-```
-
-追加後の `管理` セクション:
 ```ts
 {
   label: '管理',
   links: [
     { href: '/contracts', label: '契約・売上',    icon: '📝' },
-    { href: '/overview',  label: 'システム概要',  icon: '🗺' },  // ← 追加
+    { href: '/overview',  label: 'システム概要',  icon: '🌐' },  // ← 追加
     { href: '/settings',  label: '設定',          icon: '⚙' },
   ],
 }
@@ -101,7 +119,7 @@
 
 | ファイル | 役割 |
 |---------|------|
-| `src/app/(main)/overview/page.tsx` | ページコンポーネント（Server Component、`'use client'` 不要） |
+| `src/app/(main)/overview/page.tsx` | ページコンポーネント（Server Component） |
 | `src/app/(main)/overview/page.test.tsx` | レンダリングテスト |
 | `src/components/layout/Sidebar.tsx` | 「システム概要」リンクを追加（既存ファイル修正） |
 
@@ -109,19 +127,25 @@
 
 ## テスト方針
 
-`src/app/(main)/overview/page.test.tsx` に以下をテスト：
+`src/app/(main)/overview/page.test.tsx` に以下をテスト（`@testing-library/react` + `render` + `screen.getByText`、既存 `KpiCard.test.tsx` パターン準拠）：
 
 1. ページがクラッシュせずレンダリングされること
-2. 5 つのフローステップタイトル（「メール受信・解析」「案件・人材管理」「AIマッチング」「提案・交渉」「契約・売上管理」）がすべて DOM に存在すること
-3. Phase 3 の 3 カードタイトル（「自律型AIエージェント」「高度分析ダッシュボード」「外部システム連携」）がすべて存在すること
-
-テストパターンは既存の `src/components/dashboard/KpiCard.test.tsx` に準拠する（`@testing-library/react` + `render` + `screen.getByText`）。
+2. 5 つのフローステップタイトルがすべて DOM に存在すること:
+   - `"メール受信・解析"`
+   - `"案件・人材管理"`
+   - `"AIマッチング"`
+   - `"提案・交渉"`
+   - `"契約・売上管理"`
+3. Phase 3 の 3 カードタイトルがすべて存在すること:
+   - `"自律型AIエージェント"`（絵文字含む表示テキストで検索）
+   - `"高度分析ダッシュボード"`
+   - `"外部システム連携"`
 
 ---
 
 ## デザイン仕様
 
 - **テーマ:** 既存のダーク系（`bg-[#080f1e]` / `bg-vatch-surface`）に準拠
-- **レイアウト:** 既存 `(main)/layout.tsx` を継承（Sidebar + Topbar 自動適用）
+- **レイアウト:** 既存 `(main)/layout.tsx` を継承（Sidebar 自動適用、Topbar は page.tsx で明示レンダリング）
 - **背景色:** カード `bg-vatch-surface`、ページ `bg-[#080f1e]`
 - **ボーダー:** `border-vatch-border`（既存テーマ変数）
