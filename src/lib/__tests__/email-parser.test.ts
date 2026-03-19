@@ -89,7 +89,10 @@ describe('parseEmailBody', () => {
     const longBody = 'a'.repeat(5000)
     await parseEmailBody(longBody)
 
-    const calledBody = mockCreate.mock.calls[0][0].messages[0].content
-    expect(calledBody.length).toBeLessThanOrEqual(3000)
+    const calledContent = mockCreate.mock.calls[0][0].messages[0].content as string
+    const prefix = '以下のSES営業メールを解析して案件または人材情報を抽出してください。\n\n'
+    const bodyPart = calledContent.slice(prefix.length)
+    expect(bodyPart.length).toBeLessThanOrEqual(3000)
+    expect(bodyPart.length).toBe(3000) // 5000文字入力なので必ず3000に切り詰められる
   })
 })

@@ -70,7 +70,8 @@ const TOOL_DEFINITION: Anthropic.Tool = {
 }
 
 async function callClaude(bodyText: string): Promise<ParsedEmailResult> {
-  const content = `以下のSES営業メールを解析して案件または人材情報を抽出してください。\n\n${bodyText}`.slice(0, 3000)
+  const truncated = bodyText.slice(0, 3000)
+  const content = `以下のSES営業メールを解析して案件または人材情報を抽出してください。\n\n${truncated}`
   const response = await getClient().messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1024,
@@ -94,8 +95,9 @@ async function callClaude(bodyText: string): Promise<ParsedEmailResult> {
 export async function parseEmailBody(bodyText: string): Promise<ParsedEmailResult> {
   try {
     return await callClaude(bodyText)
-  } catch {
-    // 1回リトライ
+  } catch (err) {
+    // 1回リトライ（初回エラーをログに記録）
+    console.error('[email-parser] First attempt failed, retrying:', err)
     return await callClaude(bodyText)
   }
 }
