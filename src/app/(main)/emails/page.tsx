@@ -257,10 +257,10 @@ export default function EmailsPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-screen bg-vatch-bg">
+    <div className="flex flex-col h-full bg-vatch-bg">
       <Topbar title="メール取込" />
 
-      <main className="flex-1 p-6 flex flex-col gap-4">
+      <main className="flex-1 overflow-y-auto p-6 flex flex-col gap-4">
         {/* ヘッダーアクション */}
         <div className="flex items-center justify-between">
           <div className="flex flex-col gap-1">
@@ -336,7 +336,7 @@ export default function EmailsPage() {
         </div>
 
         {/* テーブル */}
-        <div className="flex-1 bg-vatch-surface border border-vatch-border rounded-xl overflow-hidden">
+        <div className="bg-vatch-surface border border-vatch-border rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
