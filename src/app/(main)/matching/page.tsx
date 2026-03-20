@@ -277,7 +277,7 @@ export default function MatchingPage() {
   }
 
   return (
-    <>
+    <div className="flex flex-col h-full">
       <Topbar title="マッチング一覧" subtitle="AIマッチング候補 — 案件 × 人材" />
 
       <main className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
@@ -500,6 +500,6 @@ export default function MatchingPage() {
         )}
 
       </main>
-    </>
+    </div>
   )
 }
