@@ -23,5 +23,5 @@ export const TalentQuerySchema = z.object({
   skills:    z.string().optional(),
   workStyle: z.enum(['REMOTE', 'ONSITE', 'HYBRID']).optional(),
   page:      z.coerce.number().min(1).default(1),
-  limit:     z.coerce.number().min(1).max(100).default(20),
+  limit:     z.coerce.number().min(1).max(500).default(20),
 })
