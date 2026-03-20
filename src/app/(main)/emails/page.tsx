@@ -195,10 +195,13 @@ export default function EmailsPage() {
   const [retryTotal, setRetryTotal] = useState(0);
 
   const [selectedEmail, setSelectedEmail] = useState<EmailDetail | null>(null)
-  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null)
   const [detailError, setDetailError] = useState<string | null>(null)
 
-  const closeModal = useCallback(() => setSelectedEmail(null), [])
+  const closeModal = useCallback(() => {
+    setSelectedEmail(null)
+    setDetailError(null)
+  }, [])
 
   async function loadEmails(silent = false) {
     if (!silent) setLoading(true);
@@ -270,7 +273,7 @@ export default function EmailsPage() {
   };
 
   async function handleDetail(id: string) {
-    setDetailLoading(true)
+    setDetailLoadingId(id)
     setDetailError(null)
     try {
       const res = await fetch(`/api/emails/${id}`)
@@ -281,7 +284,7 @@ export default function EmailsPage() {
     } catch (err) {
       setDetailError(err instanceof Error ? err.message : '詳細の取得に失敗しました')
     } finally {
-      setDetailLoading(false)
+      setDetailLoadingId(null)
     }
   }
 
@@ -396,7 +399,7 @@ export default function EmailsPage() {
                   </tr>
                 ) : filtered.length > 0 ? (
                   filtered.map((item) => (
-                    <EmailRow key={item.id} item={item} onDetail={handleDetail} detailLoading={detailLoading} />
+                    <EmailRow key={item.id} item={item} onDetail={handleDetail} detailLoading={detailLoadingId === item.id} />
                   ))
                 ) : (
                   <tr>
