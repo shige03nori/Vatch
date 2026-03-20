@@ -217,6 +217,10 @@ export default function MatchingPage() {
 
   async function handleProposalSend() {
     if (!proposalTarget) return
+    if (!proposalTo || !proposalTo.includes('@')) {
+      alert('宛先メールアドレスを入力してください')
+      return
+    }
     setProposalSending(true)
     try {
       await navigator.clipboard.writeText(
