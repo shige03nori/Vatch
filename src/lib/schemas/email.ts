@@ -7,7 +7,7 @@ export const CreateEmailSchema = z.object({
   fromEmail:     z.string().email(),
   subject:       z.string().min(1),
   bodyText:      z.string(),
-  type:          z.enum(['CASE', 'TALENT']),
+  type:          z.enum(['CASE', 'TALENT', 'UNKNOWN']),
   skills:        z.array(z.string()).default([]),
   extractedName: z.string().optional(),
   confidence:    z.number().int().min(0).max(100).optional(),
@@ -19,7 +19,7 @@ export const UpdateEmailSchema = z.object({
 })
 
 export const EmailQuerySchema = z.object({
-  type:   z.enum(['CASE', 'TALENT']).optional(),
+  type:   z.enum(['CASE', 'TALENT', 'UNKNOWN']).optional(),
   status: z.enum(['PENDING','PARSING','PARSED','ERROR']).optional(),
   page:   z.coerce.number().min(1).default(1),
   limit:  z.coerce.number().min(1).max(100).default(20),

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { Topbar } from '@/components/layout/Topbar'
 
 type TabId = 'profile' | 'ai' | 'notifications' | 'system'
@@ -268,18 +269,37 @@ export default function SettingsPage() {
 
           {/* System info */}
           {activeTab === 'system' && (
-            <SectionCard title="システム情報">
-              {[
-                { label: 'バージョン', value: 'v1.0.0 (Phase 1 Mock)' },
-                { label: '環境', value: 'Development' },
-                { label: '最終更新', value: '2026-03-18' },
-              ].map(({ label, value }) => (
-                <div key={label} className="flex items-center justify-between py-1">
-                  <span className="text-xs font-semibold text-vatch-muted">{label}</span>
-                  <span className="text-sm text-vatch-text-bright font-mono">{value}</span>
+            <>
+              <SectionCard title="システム情報">
+                {[
+                  { label: 'バージョン', value: 'v1.0.0 (Phase 1 Mock)' },
+                  { label: '環境', value: 'Development' },
+                  { label: '最終更新', value: '2026-03-18' },
+                ].map(({ label, value }) => (
+                  <div key={label} className="flex items-center justify-between py-1">
+                    <span className="text-xs font-semibold text-vatch-muted">{label}</span>
+                    <span className="text-sm text-vatch-text-bright font-mono">{value}</span>
+                  </div>
+                ))}
+              </SectionCard>
+              <div className="bg-vatch-surface border border-vatch-border rounded-lg p-5">
+                <h2 className="text-sm font-bold text-vatch-text-bright border-b border-vatch-border pb-3 mb-4">
+                  外部連携
+                </h2>
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm text-vatch-text-bright">メール取込設定</span>
+                    <span className="text-xs text-vatch-muted">IMAP取込対象のメールアドレスを管理します</span>
+                  </div>
+                  <Link
+                    href="/settings/email-sources"
+                    className="px-3 py-1.5 rounded-md text-xs font-semibold bg-vatch-cyan text-vatch-bg hover:bg-vatch-cyan/90 transition-colors"
+                  >
+                    設定を開く
+                  </Link>
                 </div>
-              ))}
-            </SectionCard>
+              </div>
+            </>
           )}
 
         </div>
