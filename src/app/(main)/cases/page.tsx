@@ -287,9 +287,8 @@ export default function CasesPage() {
             </div>
           </div>
         </div>
-      </main>
 
-      <Modal open={selectedCase !== null} onClose={closeModal}>
+        <Modal open={selectedCase !== null} onClose={closeModal}>
         <div className="bg-vatch-surface border border-vatch-border rounded-xl shadow-2xl overflow-hidden">
           {/* ヘッダー */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-vatch-border">
@@ -470,6 +469,7 @@ export default function CasesPage() {
           </div>
         </div>
       </Modal>
+      </main>
     </div>
   );
 }
