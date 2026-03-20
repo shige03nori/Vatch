@@ -191,7 +191,11 @@ export default function MatchingPage() {
       if (json.success) {
         alert(`${json.data.generated}件のマッチングを生成しました（${json.data.skipped}件スキップ）`)
         await loadMatchings()
+      } else {
+        alert('マッチング生成に失敗しました')
       }
+    } catch {
+      alert('マッチング生成中にエラーが発生しました')
     } finally {
       setGenerating(false)
     }
@@ -222,6 +226,8 @@ export default function MatchingPage() {
       })
       closeProposalModal()
       await loadMatchings()
+    } catch (err) {
+      alert(`エラーが発生しました: ${err instanceof Error ? err.message : '不明なエラー'}`)
     } finally {
       setProposalSending(false)
     }
@@ -255,6 +261,8 @@ export default function MatchingPage() {
       )
       closeBulkModal()
       await loadMatchings()
+    } catch (err) {
+      alert(`エラーが発生しました: ${err instanceof Error ? err.message : '不明なエラー'}`)
     } finally {
       setBulkSending(false)
     }
