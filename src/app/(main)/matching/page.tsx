@@ -15,6 +15,9 @@ type MatchingItem = {
   timingOk: boolean
   locationOk: boolean
   grossProfitOk: boolean
+  costPrice: number       // 万円整数
+  sellPrice: number       // 万円整数
+  grossProfitRate: number // 0.0-1.0
   reason: string | null
   isAutoSend: boolean
   status: MatchingStatus
@@ -219,6 +222,27 @@ export default function MatchingPage() {
       await navigator.clipboard.writeText(
         `宛先: ${proposalTo}\n件名: ${proposalSubject}\n\n${proposalBody}`
       )
+
+      // Proposal レコードを作成（失敗してもマッチング更新は続行）
+      const proposalRes = await fetch('/api/proposals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          matchingId:      proposalTarget.id,
+          to:              proposalTo,
+          subject:         proposalSubject,
+          bodyText:        proposalBody,
+          status:          'SENT',
+          costPrice:       proposalTarget.costPrice,
+          sellPrice:       proposalTarget.sellPrice,
+          grossProfitRate: proposalTarget.grossProfitRate,
+          isAutoSend:      false,
+        }),
+      })
+      if (!proposalRes.ok) {
+        console.warn('Proposal 作成に失敗しました（マッチング更新は続行）')
+      }
+
       await fetch(`/api/matchings/${proposalTarget.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
