@@ -87,4 +87,28 @@ describe('POST /api/proposals', () => {
     })
     expect((await POST(req)).status).toBe(201)
   })
+
+  it('creates a proposal with status SENT', async () => {
+    mockAuth.mockResolvedValueOnce(adminSession)
+    mockCreate.mockResolvedValueOnce({ id: 'p2', status: 'SENT' })
+    const req = new Request('http://localhost/api/proposals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        matchingId:      'clh5u5vw00000356ng7nc4l12',
+        to:              'client@example.com',
+        subject:         'Test Proposal',
+        bodyText:        'Dear client...',
+        status:          'SENT',
+        costPrice:       60,
+        sellPrice:       80,
+        grossProfitRate: 0.25,
+      }),
+    })
+    const res = await POST(req)
+    expect(res.status).toBe(201)
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'SENT' }) })
+    )
+  })
 })
