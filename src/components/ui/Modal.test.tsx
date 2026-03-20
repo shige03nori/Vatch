@@ -38,3 +38,15 @@ test('role="dialog" aria-modal="true" aria-labelledby="modal-title" が設定さ
   expect(dialog).toHaveAttribute('aria-modal', 'true')
   expect(dialog).toHaveAttribute('aria-labelledby', 'modal-title')
 })
+
+test('panelClassName が指定されたとき dialog パネルに適用される', () => {
+  render(<Modal open={true} onClose={() => {}} panelClassName="max-w-2xl"><div>content</div></Modal>)
+  const dialog = screen.getByRole('dialog')
+  expect(dialog.className).toContain('max-w-2xl')
+})
+
+test('panelClassName が未指定のとき max-w-xl が適用される', () => {
+  render(<Modal open={true} onClose={() => {}}><div>content</div></Modal>)
+  const dialog = screen.getByRole('dialog')
+  expect(dialog.className).toContain('max-w-xl')
+})

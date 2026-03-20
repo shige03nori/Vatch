@@ -6,9 +6,10 @@ type ModalProps = {
   open: boolean
   onClose: () => void
   children: React.ReactNode
+  panelClassName?: string
 }
 
-export function Modal({ open, onClose, children }: ModalProps) {
+export function Modal({ open, onClose, children, panelClassName }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -67,7 +68,7 @@ export function Modal({ open, onClose, children }: ModalProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
-        className="relative z-10 w-full max-w-xl mx-4"
+        className={`relative z-10 w-full mx-4 ${panelClassName ?? 'max-w-xl'}`}
         onClick={(e) => e.stopPropagation()}
       >
         {children}
