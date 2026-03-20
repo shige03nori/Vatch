@@ -280,7 +280,8 @@ export default function MatchingPage() {
     <div className="flex flex-col h-full">
       <Topbar title="マッチング一覧" subtitle="AIマッチング候補 — 案件 × 人材" />
 
-      <main className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
+      <main className="flex-1 overflow-y-auto">
+        <div className="p-5 flex flex-col gap-4">
 
         {/* ── Summary KPIs ───────────────────────────────────────── */}
         <div className="grid grid-cols-4 gap-2.5">
@@ -499,6 +500,7 @@ export default function MatchingPage() {
           </div>
         )}
 
+        </div>
       </main>
     </div>
   )
