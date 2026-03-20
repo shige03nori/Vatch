@@ -118,6 +118,10 @@ export default function CasesPage() {
 
   async function handleSave() {
     if (!selectedCase) return
+    if (!editForm.startDate) {
+      setSaveError('開始時期を入力してください')
+      return
+    }
     setSaving(true)
     setSaveError(null)
     try {
@@ -126,15 +130,16 @@ export default function CasesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...editForm,
-          startDate: new Date(editForm.startDate!).toISOString(),
+          startDate: new Date(editForm.startDate).toISOString(),
         }),
       })
-      const json = await res.json()
+      let json: { data?: CaseItem; error?: { message?: string } } = {}
+      try { json = await res.json() } catch { /* non-JSON body */ }
       if (!res.ok) throw new Error(json.error?.message ?? '保存に失敗しました')
-      const updated: CaseItem = json.data
+      const updated: CaseItem = json.data!
       setCases((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
       setSelectedCase(updated)
-      setEditing(false)
+      // setEditing(false) is handled by the useEffect watching selectedCase
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : '保存に失敗しました')
     } finally {
