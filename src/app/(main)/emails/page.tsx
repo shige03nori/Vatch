@@ -537,7 +537,7 @@ export default function EmailsPage() {
                         <div>
                           <div className="text-[10px] text-vatch-muted mb-1">人材</div>
                           {selectedEmail.talents.map((t) => (
-                            <Link key={t.id} href="/talents" className="block text-sm text-[#a78bfa] hover:underline">
+                            <Link key={t.id} href="/talents" className="block text-sm text-vatch-purple hover:underline">
                               {t.name}
                             </Link>
                           ))}
