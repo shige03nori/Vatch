@@ -90,7 +90,7 @@ describe('parseEmailBody', () => {
     await parseEmailBody(longBody)
 
     const calledContent = mockCreate.mock.calls[0][0].messages[0].content as string
-    const prefix = '以下のSES営業メールを解析して案件または人材情報を抽出してください。\n\n'
+    const prefix = '以下のSES営業メールを解析して案件または人材情報を抽出してください。\n\n注意: 単価・希望単価は必ず「万円単位の整数」で返してください（例: 70万円→70、800,000円→80）。\n\n'
     const bodyPart = calledContent.slice(prefix.length)
     expect(bodyPart.length).toBeLessThanOrEqual(3000)
     expect(bodyPart.length).toBe(3000) // 5000文字入力なので必ず3000に切り詰められる
