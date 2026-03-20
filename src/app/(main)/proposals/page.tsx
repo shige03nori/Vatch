@@ -17,7 +17,7 @@ type ProposalItem = {
   isAutoSend: boolean
   costPrice: number       // 万円整数
   sellPrice: number       // 万円整数
-  grossProfitRate: number // 0.0-1.0
+  grossProfitRate: number // パーセンテージ値（例: 17.6）
   sentAt: string | null
   createdAt: string
   matching: {
@@ -50,10 +50,9 @@ const STATUS_STYLES: Record<ProposalStatus, string> = {
 // ── GrossProfitBar ────────────────────────────────────────────────────────────
 
 function GrossProfitBar({ rate }: { rate: number }) {
-  // rate は 0.0-1.0（DB 値）
-  const isOk = rate >= 0.1
-  const pct = rate * 100
-  const capped = Math.min(pct, 30)
+  // rate はパーセンテージ値（例: 17.6）
+  const isOk = rate >= 10
+  const capped = Math.min(rate, 30)
   const barWidth = `${(capped / 30) * 100}%`
   return (
     <div className="w-full h-2 rounded-full bg-vatch-border mt-1.5">
@@ -76,7 +75,7 @@ function QueueItem({
   isActive: boolean
   onClick: () => void
 }) {
-  const pct = Math.round(item.grossProfitRate * 100)
+  const pct = Math.round(item.grossProfitRate)
   return (
     <button
       onClick={onClick}
@@ -101,7 +100,7 @@ function QueueItem({
       </div>
       <div className="flex items-center gap-2 mt-1.5">
         <span className="text-[10px] text-vatch-cyan font-bold">AI {item.matching.score}%</span>
-        <span className={`text-[10px] font-semibold ${item.grossProfitRate >= 0.1 ? 'text-vatch-green' : 'text-vatch-red'}`}>
+        <span className={`text-[10px] font-semibold ${item.grossProfitRate >= 10 ? 'text-vatch-green' : 'text-vatch-red'}`}>
           粗利 {pct}%
         </span>
       </div>
@@ -218,8 +217,8 @@ export default function ProposalsPage() {
     )
   }
 
-  const grossProfitPct = (selected.grossProfitRate * 100).toFixed(1)
-  const isMarginOk = selected.grossProfitRate >= 0.1
+  const grossProfitPct = selected.grossProfitRate.toFixed(1)
+  const isMarginOk = selected.grossProfitRate >= 10
   const grossProfitAmt = selected.sellPrice - selected.costPrice
 
   return (
