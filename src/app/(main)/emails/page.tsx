@@ -260,7 +260,8 @@ export default function EmailsPage() {
     <div className="flex flex-col h-full bg-vatch-bg">
       <Topbar title="メール取込" />
 
-      <main className="flex-1 overflow-y-auto p-6 flex flex-col gap-4">
+      <main className="flex-1 overflow-y-auto">
+        <div className="p-6 flex flex-col gap-4">
         {/* ヘッダーアクション */}
         <div className="flex items-center justify-between">
           <div className="flex flex-col gap-1">
@@ -393,6 +394,7 @@ export default function EmailsPage() {
               </span>
             </div>
           </div>
+        </div>
         </div>
       </main>
     </div>
