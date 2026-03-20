@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Topbar } from '@/components/layout/Topbar';
+import { Modal } from '@/components/ui/Modal';
+import Link from 'next/link';
 
 type EmailStatus = 'PENDING' | 'PARSING' | 'PARSED' | 'ERROR';
 
@@ -16,6 +18,14 @@ type EmailItem = {
   extractedName: string | null;
   confidence: number | null;
 };
+
+type EmailDetail = EmailItem & {
+  fromEmail: string
+  bodyText: string
+  cases:   { id: string; title: string }[]
+  talents: { id: string; name: string }[]
+  createdAt: string
+}
 
 type FilterTab = 'all' | 'case' | 'talent' | 'error';
 
@@ -97,7 +107,7 @@ function ConfidenceBar({ confidence }: { confidence: number }) {
   );
 }
 
-function EmailRow({ item, onDetail }: { item: EmailItem; onDetail: (id: string) => void }) {
+function EmailRow({ item, onDetail, detailLoading }: { item: EmailItem; onDetail: (id: string) => void; detailLoading: boolean }) {
   return (
     <tr className="border-b border-vatch-border hover:bg-vatch-surface/60 transition-colors">
       {/* 受信時刻 */}
@@ -166,7 +176,8 @@ function EmailRow({ item, onDetail }: { item: EmailItem; onDetail: (id: string) 
       <td className="px-4 py-3 whitespace-nowrap">
         <button
           onClick={() => onDetail(item.id)}
-          className="px-3 py-1 rounded text-[12px] font-medium text-vatch-cyan border border-vatch-cyan/40 hover:bg-vatch-cyan/10 transition-colors"
+          disabled={detailLoading}
+          className="px-3 py-1 rounded text-[12px] font-medium text-vatch-cyan border border-vatch-cyan/40 hover:bg-vatch-cyan/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           詳細
         </button>
@@ -182,6 +193,12 @@ export default function EmailsPage() {
   const [fetching, setFetching] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [retryTotal, setRetryTotal] = useState(0);
+
+  const [selectedEmail, setSelectedEmail] = useState<EmailDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailError, setDetailError] = useState<string | null>(null)
+
+  const closeModal = useCallback(() => setSelectedEmail(null), [])
 
   async function loadEmails(silent = false) {
     if (!silent) setLoading(true);
@@ -252,8 +269,20 @@ export default function EmailsPage() {
     error:  emails.filter((e) => e.status === 'ERROR').length,
   };
 
-  function handleDetail(id: string) {
-    alert(`詳細: メールID ${id}`);
+  async function handleDetail(id: string) {
+    setDetailLoading(true)
+    setDetailError(null)
+    try {
+      const res = await fetch(`/api/emails/${id}`)
+      let json: { data?: EmailDetail; error?: { message?: string } } = {}
+      try { json = await res.json() } catch { /* non-JSON body */ }
+      if (!res.ok) throw new Error(json.error?.message ?? '詳細の取得に失敗しました')
+      setSelectedEmail(json.data as EmailDetail)
+    } catch (err) {
+      setDetailError(err instanceof Error ? err.message : '詳細の取得に失敗しました')
+    } finally {
+      setDetailLoading(false)
+    }
   }
 
   return (
@@ -336,6 +365,10 @@ export default function EmailsPage() {
           ))}
         </div>
 
+        {detailError && (
+          <p className="text-red-400 text-xs">{detailError}</p>
+        )}
+
         {/* テーブル */}
         <div className="bg-vatch-surface border border-vatch-border rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
@@ -363,7 +396,7 @@ export default function EmailsPage() {
                   </tr>
                 ) : filtered.length > 0 ? (
                   filtered.map((item) => (
-                    <EmailRow key={item.id} item={item} onDetail={handleDetail} />
+                    <EmailRow key={item.id} item={item} onDetail={handleDetail} detailLoading={detailLoading} />
                   ))
                 ) : (
                   <tr>
@@ -396,6 +429,125 @@ export default function EmailsPage() {
           </div>
         </div>
         </div>
+
+        <Modal open={selectedEmail !== null} onClose={closeModal} panelClassName="max-w-2xl">
+          <div className="bg-vatch-surface border border-vatch-border rounded-xl shadow-2xl overflow-hidden">
+            {/* ヘッダー */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-vatch-border">
+              <h2 id="modal-title" className="text-base font-bold text-white truncate pr-4">
+                {selectedEmail?.subject}
+              </h2>
+              <button
+                onClick={closeModal}
+                className="text-vatch-muted hover:text-white transition-colors text-lg leading-none"
+                aria-label="閉じる"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* ボディ */}
+            {selectedEmail && (
+              <div className="px-5 py-4 space-y-4 max-h-[80vh] overflow-y-auto">
+
+                {/* セクション1: メール情報 */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <div className="text-[10px] text-vatch-muted uppercase tracking-wide mb-1">差出人</div>
+                    <div className="text-sm text-white">{selectedEmail.from}</div>
+                    <div className="text-xs text-vatch-muted mt-0.5">{selectedEmail.fromEmail}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-vatch-muted uppercase tracking-wide mb-1">受信日時</div>
+                    <div className="text-sm text-white">
+                      {new Date(selectedEmail.receivedAt).toLocaleString('ja-JP')}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-vatch-muted uppercase tracking-wide mb-1">種別</div>
+                    <TypeBadge type={selectedEmail.type} />
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-vatch-muted uppercase tracking-wide mb-1">ステータス</div>
+                    <StatusBadge status={selectedEmail.status} />
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-vatch-muted uppercase tracking-wide mb-1">AI信頼度</div>
+                    {selectedEmail.confidence !== null ? (
+                      <ConfidenceBar confidence={selectedEmail.confidence} />
+                    ) : (
+                      <span className="text-sm text-vatch-muted">—</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* セクション2: AI解析結果 */}
+                <div className="border-t border-vatch-border pt-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-[10px] text-vatch-muted uppercase tracking-wide mb-1">抽出名</div>
+                      <div className="text-sm text-white">{selectedEmail.extractedName ?? '—'}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-vatch-muted uppercase tracking-wide mb-1">スキル</div>
+                      {selectedEmail.skills.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {selectedEmail.skills.map((s) => (
+                            <span key={s} className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-vatch-border-light/60 text-vatch-text-dim border border-vatch-border-light">
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-vatch-muted">—</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* セクション3: メール本文 */}
+                <div className="border-t border-vatch-border pt-4">
+                  <div className="text-[10px] text-vatch-muted uppercase tracking-wide mb-2">メール本文</div>
+                  <pre className="whitespace-pre-wrap text-xs text-vatch-muted font-mono bg-vatch-bg rounded-lg p-3 max-h-60 overflow-y-auto border border-vatch-border">
+                    {selectedEmail.bodyText || '（本文なし）'}
+                  </pre>
+                </div>
+
+                {/* セクション4: 関連する案件/人材 */}
+                <div className="border-t border-vatch-border pt-4 space-y-3">
+                  <div className="text-[10px] text-vatch-muted uppercase tracking-wide">関連する案件 / 人材</div>
+                  {selectedEmail.cases.length === 0 && selectedEmail.talents.length === 0 ? (
+                    <p className="text-sm text-vatch-muted">関連する案件・人材はありません</p>
+                  ) : (
+                    <>
+                      {selectedEmail.cases.length > 0 && (
+                        <div>
+                          <div className="text-[10px] text-vatch-muted mb-1">案件</div>
+                          {selectedEmail.cases.map((c) => (
+                            <Link key={c.id} href="/cases" className="block text-sm text-vatch-cyan hover:underline">
+                              {c.title}
+                            </Link>
+                          ))}
+                        </div>
+                      )}
+                      {selectedEmail.talents.length > 0 && (
+                        <div>
+                          <div className="text-[10px] text-vatch-muted mb-1">人材</div>
+                          {selectedEmail.talents.map((t) => (
+                            <Link key={t.id} href="/talents" className="block text-sm text-[#a78bfa] hover:underline">
+                              {t.name}
+                            </Link>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+              </div>
+            )}
+          </div>
+        </Modal>
       </main>
     </div>
   );
