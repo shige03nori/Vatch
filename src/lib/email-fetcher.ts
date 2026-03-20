@@ -33,7 +33,11 @@ export async function fetchUnreadEmails(config: ImapConfig): Promise<FetchedEmai
 
   await connection.openBox('INBOX')
 
-  const searchCriteria = ['UNSEEN']
+  const since = new Date()
+  since.setDate(since.getDate() - 2)
+  since.setHours(0, 0, 0, 0)
+
+  const searchCriteria = ['UNSEEN', ['SINCE', since]]
   const fetchOptions = { bodies: ['HEADER', 'TEXT', ''], markSeen: true }
 
   const messages = await connection.search(searchCriteria, fetchOptions)
