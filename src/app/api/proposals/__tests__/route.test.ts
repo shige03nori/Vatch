@@ -50,6 +50,29 @@ describe('GET /api/proposals', () => {
       })
     )
   })
+
+  it('returns proposals with nested matching, case and talent', async () => {
+    mockAuth.mockResolvedValueOnce(adminSession)
+    mockFindMany.mockResolvedValueOnce([{
+      id: 'p1',
+      matching: {
+        id: 'm1',
+        score: 90,
+        reason: 'スキル一致',
+        case:   { id: 'c1', title: 'React Dev', client: 'ACME', unitPrice: 70 },
+        talent: { id: 't1', name: '田中', skills: ['React'], desiredRate: 60 },
+      },
+    }])
+    mockCount.mockResolvedValueOnce(1)
+    await GET(new Request('http://localhost/api/proposals'))
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({
+          matching: expect.anything(),
+        }),
+      })
+    )
+  })
 })
 
 describe('POST /api/proposals', () => {
