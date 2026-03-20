@@ -181,20 +181,28 @@ export default function EmailsPage() {
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [retryTotal, setRetryTotal] = useState(0);
 
-  async function loadEmails() {
-    setLoading(true);
+  async function loadEmails(silent = false) {
+    if (!silent) setLoading(true);
     try {
       const res = await fetch('/api/emails?limit=100');
-      if (!res.ok) return;  // エラー時は空のまま（画面には「0件」が表示される）
+      if (!res.ok) return;
       const json = await res.json();
       if (json.success) setEmails(json.data);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }
 
   useEffect(() => { loadEmails(); }, []);
+
+  // 再解析中は2秒ごとにサイレントリフレッシュ
+  useEffect(() => {
+    if (!retrying) return;
+    const id = setInterval(() => { loadEmails(true); }, 2000);
+    return () => clearInterval(id);
+  }, [retrying]);
 
   async function handleFetchNow() {
     setFetching(true);
@@ -216,6 +224,7 @@ export default function EmailsPage() {
       alert('再解析対象のエラーメールはありません。');
       return;
     }
+    setRetryTotal(errorCount);
     setRetrying(true);
     try {
       const res = await fetch('/api/emails/retry', { method: 'POST' });
@@ -223,13 +232,10 @@ export default function EmailsPage() {
         alert('再解析に失敗しました。管理者権限が必要です。');
         return;
       }
-      const json = await res.json();
-      if (json.success) {
-        alert(`再解析完了: ${json.data.parsed}件成功 / ${json.data.errors}件エラー`);
-      }
       await loadEmails();
     } finally {
       setRetrying(false);
+      setRetryTotal(0);
     }
   }
 
@@ -257,13 +263,30 @@ export default function EmailsPage() {
       <main className="flex-1 p-6 flex flex-col gap-4">
         {/* ヘッダーアクション */}
         <div className="flex items-center justify-between">
-          <div>
+          <div className="flex flex-col gap-1">
             <p className="text-[13px] text-vatch-text-dim">
               直近のメール取込結果 — <span className="text-vatch-text-bright">{emails.length}件</span>
             </p>
+            {retrying && retryTotal > 0 && (() => {
+              const parsedCount = retryTotal - emails.filter((e) => e.status === 'ERROR' || e.status === 'PARSING').length;
+              const progress = Math.max(0, Math.min(100, Math.round((parsedCount / retryTotal) * 100)));
+              return (
+                <div className="flex items-center gap-2 mt-0.5">
+                  <div className="w-40 h-1.5 bg-vatch-border rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-vatch-amber rounded-full transition-all duration-500"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                  <span className="text-[11px] text-vatch-amber font-medium">
+                    {parsedCount} / {retryTotal} 件完了
+                  </span>
+                </div>
+              );
+            })()}
           </div>
           <div className="flex items-center gap-2">
-            {emails.filter((e) => e.status === 'ERROR').length > 0 && (
+            {(retrying || emails.filter((e) => e.status === 'ERROR').length > 0) && (
               <button
                 onClick={handleRetry}
                 disabled={retrying}
