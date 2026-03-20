@@ -12,6 +12,7 @@
 
 | ファイル | 変更 | 役割 |
 |---|---|---|
+| `src/lib/schemas/proposal.ts` | 修正 | `CreateProposalSchema` に `status` フィールドを追加 |
 | `src/app/api/proposals/route.ts` | 修正 | GET の findMany に `include: { matching: { case, talent } }` 追加 |
 | `src/app/api/proposals/__tests__/route.test.ts` | 修正 | include 対応テスト追加 |
 | `src/app/(main)/matching/page.tsx` | 修正 | 「コピーして送信済みにする」で `POST /api/proposals` も呼ぶ |
@@ -43,6 +44,27 @@ prisma.proposal.findMany({
 
 ---
 
+## `CreateProposalSchema` の修正
+
+`src/lib/schemas/proposal.ts` の `CreateProposalSchema` に `status` フィールドを追加する：
+
+```ts
+export const CreateProposalSchema = z.object({
+  matchingId:      z.string().cuid(),
+  to:              z.string().email(),
+  cc:              z.string().email().optional(),
+  subject:         z.string().min(1),
+  bodyText:        z.string().min(1),
+  status:          z.enum(['DRAFT','PENDING_AUTO','SENT','REPLIED','REJECTED']).default('DRAFT'),
+  costPrice:       z.number().int().positive(),
+  sellPrice:       z.number().int().positive(),
+  grossProfitRate: z.number(),
+  isAutoSend:      z.boolean().default(false),
+})
+```
+
+---
+
 ## マッチング画面の修正
 
 ### 「コピーして送信済みにする」の拡張
@@ -66,6 +88,7 @@ Proposal 作成失敗時はアラートで通知するが、マッチング stat
   to:              proposalTo,
   subject:         proposalSubject,
   bodyText:        proposalBody,
+  status:          'SENT',                       // 手動送信済みとして作成
   costPrice:       proposalTarget.costPrice,    // matching.costPrice（万円整数）
   sellPrice:       proposalTarget.sellPrice,    // matching.sellPrice（万円整数）
   grossProfitRate: proposalTarget.grossProfitRate,
@@ -121,15 +144,22 @@ const [saving, setSaving] = useState(false)
 ### データ取得
 
 ```ts
-async function loadProposals() {
+async function loadProposals(currentSelectedId?: string) {
   const res = await fetch('/api/proposals?limit=100')
   const json = await res.json()
-  setProposals(json.data)
-  if (!selected && json.data.length > 0) setSelected(json.data[0])
+  const data: ProposalItem[] = json.data
+  setProposals(data)
+  if (currentSelectedId) {
+    // 保存・更新後: selected を新鮮なデータで引き直す
+    const refreshed = data.find((p) => p.id === currentSelectedId)
+    if (refreshed) handleSelect(refreshed)
+  } else if (data.length > 0) {
+    handleSelect(data[0])
+  }
 }
 ```
 
-初回マウント時と更新後に呼び出す。
+初回マウント時は引数なしで呼び出す。保存・ステータス更新後は `selected.id` を渡して選択アイテムを最新データで更新する。
 
 ### 提案選択時の処理
 
@@ -145,33 +175,49 @@ function handleSelect(item: ProposalItem) {
 
 ### 本文保存
 
-「保存」ボタン → `PATCH /api/proposals/{id}` で subject・bodyText を更新：
+「保存」ボタン → `PATCH /api/proposals/{id}` で subject・bodyText を更新。`to` フィールドの変更は保存しない（Out of Scope）：
 
 ```ts
 async function handleSave() {
-  if (!selected) return
+  if (!selected || saving) return
   setSaving(true)
-  await fetch(`/api/proposals/${selected.id}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ subject: subjectValue, bodyText: bodyValue }),
-  })
-  await loadProposals()
-  setSaving(false)
+  try {
+    const res = await fetch(`/api/proposals/${selected.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subject: subjectValue, bodyText: bodyValue }),
+    })
+    if (!res.ok) throw new Error()
+    await loadProposals(selected.id)
+  } catch {
+    alert('保存に失敗しました')
+  } finally {
+    setSaving(false)
+  }
 }
 ```
 
 ### ステータス更新
 
+二重送信防止のため `saving` フラグを共用する：
+
 ```ts
 async function handleStatusUpdate(status: 'REPLIED' | 'REJECTED') {
-  if (!selected) return
-  await fetch(`/api/proposals/${selected.id}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status }),
-  })
-  await loadProposals()
+  if (!selected || saving) return
+  setSaving(true)
+  try {
+    const res = await fetch(`/api/proposals/${selected.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    })
+    if (!res.ok) throw new Error()
+    await loadProposals(selected.id)
+  } catch {
+    alert('ステータスの更新に失敗しました')
+  } finally {
+    setSaving(false)
+  }
 }
 ```
 
@@ -218,7 +264,7 @@ async function handleStatusUpdate(status: 'REPLIED' | 'REJECTED') {
 | DRAFT | 下書き | slate |
 | PENDING_AUTO | 自動送信待ち | cyan |
 | SENT | 提案中 | blue |
-| REPLIED | 返答待ち | amber |
+| REPLIED | 返答あり | amber |
 | REJECTED | 不採用 | red |
 
 ---
@@ -235,4 +281,4 @@ async function handleStatusUpdate(status: 'REPLIED' | 'REJECTED') {
 - DRAFT・PENDING_AUTO ステータスの Proposal 新規作成 UI（マッチング画面から作成）
 - 一括ステータス更新
 - ページネーション（limit=100 で全件取得）
-- CC フィールドの入力保存（保存時は subject・bodyText のみ更新）
+- `to`・CC フィールドの変更保存（保存時は subject・bodyText のみ更新、宛先は表示のみ）
