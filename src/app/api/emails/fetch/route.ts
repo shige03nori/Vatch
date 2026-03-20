@@ -4,6 +4,15 @@ import { auth } from '@/lib/auth'
 import { ok, unauthorized, forbidden, serverError } from '@/lib/api'
 import { runIngestion } from '@/lib/email-ingestion'
 
+function triggerMatchingGenerate() {
+  const internalKey = process.env.INTERNAL_API_KEY
+  const baseUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
+  fetch(`${baseUrl}/api/matchings/generate`, {
+    method: 'POST',
+    headers: internalKey ? { Authorization: `Bearer ${internalKey}` } : {},
+  }).catch(() => { /* 失敗しても取込結果に影響させない */ })
+}
+
 export async function POST(request: Request): Promise<NextResponse> {
   // セッション認証とAPIキー認証を並行して確認
   const session = await auth()
@@ -13,7 +22,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   const internalKey = process.env.INTERNAL_API_KEY
   if (internalKey && authHeader === `Bearer ${internalKey}`) {
     try {
-      return ok(await runIngestion())
+      const result = await runIngestion()
+      triggerMatchingGenerate()
+      return ok(result)
     } catch {
       return serverError()
     }
@@ -24,7 +35,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (session.user.role !== 'ADMIN') return forbidden()
 
   try {
-    return ok(await runIngestion())
+    const result = await runIngestion()
+    triggerMatchingGenerate()
+    return ok(result)
   } catch {
     return serverError()
   }
