@@ -10,8 +10,36 @@
 
 ## Files
 
+- **Modify:** `src/components/ui/Modal.tsx` — `panelClassName` prop を追加してパネル幅をオーバーライド可能にする
 - **Modify:** `src/app/api/emails/[id]/route.ts` — GET ハンドラに `include: { cases: true, talents: true }` を追加
 - **Modify:** `src/app/(main)/emails/page.tsx` — 詳細モーダル追加
+
+---
+
+## Modal コンポーネント変更 (`src/components/ui/Modal.tsx`)
+
+`panelClassName` prop を追加し、パネルの幅クラスをオーバーライドできるようにする。
+
+```tsx
+type ModalProps = {
+  open: boolean
+  onClose: () => void
+  children: React.ReactNode
+  panelClassName?: string  // 追加
+}
+```
+
+パネル div のクラスを変更：
+
+```tsx
+// 変更前
+className="relative z-10 w-full max-w-xl mx-4"
+
+// 変更後
+className={`relative z-10 w-full mx-4 ${panelClassName ?? 'max-w-xl'}`}
+```
+
+**既存の `cases/page.tsx` と `talents/page.tsx` は `panelClassName` を渡さないため `max-w-xl` のまま動作する（後方互換）。**
 
 ---
 
@@ -49,11 +77,14 @@ type EmailDetail = EmailItem & {
 }
 ```
 
+`EmailItem` には `fromEmail` が含まれていないため、`EmailDetail` で拡張する。`setSelectedEmail(json.data as EmailDetail)` のように型アサーションを使う（APIレスポンスの形がPrismaモデルと一致するため安全）。
+
 ### 状態管理
 
 ```tsx
 const [selectedEmail, setSelectedEmail] = useState<EmailDetail | null>(null)
 const [detailLoading, setDetailLoading] = useState(false)
+const [detailError, setDetailError] = useState<string | null>(null)
 ```
 
 ### 詳細ボタン押下時の処理
@@ -61,30 +92,67 @@ const [detailLoading, setDetailLoading] = useState(false)
 ```tsx
 async function handleDetail(id: string) {
   setDetailLoading(true)
+  setDetailError(null)
   try {
     const res = await fetch(`/api/emails/${id}`)
     const json = await res.json()
-    if (res.ok) setSelectedEmail(json.data)
+    if (!res.ok) throw new Error(json.error?.message ?? '詳細の取得に失敗しました')
+    setSelectedEmail(json.data as EmailDetail)
+  } catch (err) {
+    setDetailError(err instanceof Error ? err.message : '詳細の取得に失敗しました')
   } finally {
     setDetailLoading(false)
   }
 }
 ```
 
-- ローディング中はボタンを `disabled` にするか、スピナーを表示する（UXの観点から `detailLoading` フラグを利用）
-- `closeModal` は `useCallback` でラップ（Modal の useEffect 依存配列に入るため）
+`detailError` が非 null のとき、テーブル上部などに赤いエラーメッセージを表示する（または `alert` で代替可）。
+
+`detailLoading` 中は**全行の詳細ボタンを `disabled`** にする（シンプルさを優先）。
+
+```tsx
+<button
+  onClick={() => handleDetail(item.id)}
+  disabled={detailLoading}
+  className="..."
+>
+  詳細
+</button>
+```
+
+### closeModal
 
 ```tsx
 const closeModal = useCallback(() => setSelectedEmail(null), [])
 ```
 
+`useCallback` でラップ（Modal の `useEffect` 依存配列に入るため）。
+
 ---
 
 ## モーダル UI
 
-**幅：** `max-w-2xl w-full`（本文が長いため案件モーダルより少し広め）
+**幅：** `panelClassName="max-w-2xl"` を Modal に渡す（本文が長いため案件モーダルより少し広め）
 
 **ヘッダー：** 件名（`subject`）+ ✕ 閉じるボタン（編集ボタンなし）
+
+```tsx
+<Modal open={selectedEmail !== null} onClose={closeModal} panelClassName="max-w-2xl">
+  <div className="bg-vatch-surface border border-vatch-border rounded-xl shadow-2xl overflow-hidden">
+    <div className="flex items-center justify-between px-5 py-4 border-b border-vatch-border">
+      <h2 id="modal-title" className="text-base font-bold text-white truncate pr-4">
+        {selectedEmail?.subject}
+      </h2>
+      <button onClick={closeModal} className="text-vatch-muted hover:text-white transition-colors text-lg leading-none" aria-label="閉じる">
+        ✕
+      </button>
+    </div>
+    <div className="px-5 py-4 space-y-4 max-h-[80vh] overflow-y-auto">
+      {/* セクション1〜4 */}
+    </div>
+  </div>
+</Modal>
+```
 
 ### セクション1 — メール情報
 
@@ -92,7 +160,7 @@ const closeModal = useCallback(() => setSelectedEmail(null), [])
 
 | フィールド | 表示 |
 |---|---|
-| 差出人 | `from`（表示名）+ `fromEmail`（メールアドレス） |
+| 差出人 | `from`（表示名）+ `fromEmail`（メールアドレス、小さめテキスト） |
 | 受信日時 | `new Date(receivedAt).toLocaleString('ja-JP')` |
 | 種別 | `TypeBadge` コンポーネント再利用 |
 | ステータス | `StatusBadge` コンポーネント再利用 |
@@ -115,10 +183,7 @@ const closeModal = useCallback(() => setSelectedEmail(null), [])
 
 ### セクション4 — 関連する案件/人材
 
-- 案件と人材それぞれをリスト表示
-- 案件：`→ /cases` ページへのリンク（`<Link href="/cases">` で案件管理ページへ）
-- 人材：`→ /talents` ページへのリンク
-- どちらも 0 件の場合は「関連する案件・人材はありません」を表示
+案件詳細ページ（`/cases/[id]`）は未実装のため、一覧ページ（`/cases`・`/talents`）へのリンクとする。将来、詳細ページが実装された際にリンク先を変更する。
 
 ```tsx
 {selectedEmail.cases.length > 0 && (
@@ -151,8 +216,9 @@ const closeModal = useCallback(() => setSelectedEmail(null), [])
 ## UI スタイル
 
 - モーダル背景：`bg-vatch-surface border border-vatch-border rounded-xl shadow-2xl overflow-hidden`
-- セクション区切り：`border-t border-vatch-border` + `pt-4 mt-4`
-- フォームフィールドラベル：`text-[10px] text-vatch-muted uppercase tracking-wide mb-1`
+- モーダル本文エリア：`max-h-[80vh] overflow-y-auto`（長い本文でもスクロール）
+- セクション区切り：`border-t border-vatch-border pt-4 mt-4`
+- フィールドラベル：`text-[10px] text-vatch-muted uppercase tracking-wide mb-1`
 
 ---
 
@@ -160,5 +226,5 @@ const closeModal = useCallback(() => setSelectedEmail(null), [])
 
 - メール削除機能
 - メール本文の編集
-- ページネーション（詳細モーダル内）
+- 案件/人材の個別詳細ページへのリンク（詳細ページ未実装のため）
 - メール本文の HTML レンダリング（テキストのみ）
