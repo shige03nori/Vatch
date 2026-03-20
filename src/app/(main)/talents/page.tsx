@@ -77,9 +77,10 @@ export default function TalentsPage() {
   }, [search, statusFilter, skillFilter, workStyleFilter]);
 
   return (
-    <div className="flex-1 flex flex-col min-h-screen bg-vatch-bg">
+    <div className="flex flex-col h-full bg-vatch-bg">
       <Topbar title="人材管理" />
-      <main className="flex-1 p-6">
+      <main className="flex-1 overflow-y-auto">
+        <div className="p-6">
 
         {/* サマリーカード */}
         <SummaryCards />
@@ -281,7 +282,7 @@ export default function TalentsPage() {
             </table>
           </div>
         </div>
-
+        </div>
       </main>
     </div>
   );
