@@ -12,7 +12,13 @@ export async function GET(request: Request, { params }: Params): Promise<NextRes
 
   const { id } = await params
   try {
-    const record = await prisma.email.findUnique({ where: { id } })
+    const record = await prisma.email.findUnique({
+      where: { id },
+      include: {
+        cases:   { select: { id: true, title: true } },
+        talents: { select: { id: true, name: true } },
+      },
+    })
     if (!record) return notFound()
     return ok(record)
   } catch {

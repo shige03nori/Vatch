@@ -47,6 +47,36 @@ describe('GET /api/emails/[id]', () => {
     mockFindUnique.mockResolvedValueOnce({ id: 'email-1' })
     expect((await GET(new Request('http://localhost/api/emails/email-1'), { params })).status).toBe(200)
   })
+
+  it('calls findUnique with cases and talents include', async () => {
+    mockAuth.mockResolvedValueOnce(adminSession)
+    mockFindUnique.mockResolvedValueOnce({
+      id: 'email-1',
+      cases: [{ id: 'case-1', title: 'Test Case' }],
+      talents: [{ id: 'talent-1', name: 'Test Talent' }],
+    })
+    await GET(new Request('http://localhost/api/emails/email-1'), { params })
+    expect(mockFindUnique).toHaveBeenCalledWith({
+      where: { id: 'email-1' },
+      include: {
+        cases:   { select: { id: true, title: true } },
+        talents: { select: { id: true, name: true } },
+      },
+    })
+  })
+
+  it('returns email with cases and talents in response', async () => {
+    mockAuth.mockResolvedValueOnce(adminSession)
+    mockFindUnique.mockResolvedValueOnce({
+      id: 'email-1',
+      cases: [{ id: 'case-1', title: 'Test Case' }],
+      talents: [{ id: 'talent-1', name: 'Test Talent' }],
+    })
+    const res = await GET(new Request('http://localhost/api/emails/email-1'), { params })
+    const json = await res.json()
+    expect(json.data.cases).toEqual([{ id: 'case-1', title: 'Test Case' }])
+    expect(json.data.talents).toEqual([{ id: 'talent-1', name: 'Test Talent' }])
+  })
 })
 
 describe('PATCH /api/emails/[id]', () => {
