@@ -25,7 +25,7 @@ export async function fetchUnreadEmails(config: ImapConfig): Promise<FetchedEmai
       port: config.imapPort,
       user: config.imapUser,
       password: config.imapPass,
-      tls: true,
+      tls: config.imapPort === 993,
       tlsOptions: { rejectUnauthorized: false },
       authTimeout: 10000,
     },
