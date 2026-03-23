@@ -10,7 +10,9 @@ jest.mock('@anthropic-ai/sdk', () => ({
   })),
 }))
 
-function makeToolUseResponse(input: MatchingEvaluation) {
+type ClaudeResponse = Pick<MatchingEvaluation, 'score' | 'skillMatchRate' | 'unitPriceOk' | 'timingOk' | 'locationOk' | 'reason'>
+
+function makeToolUseResponse(input: ClaudeResponse) {
   return {
     content: [{ type: 'tool_use', name: 'evaluate_matching', input }],
   }
@@ -49,18 +51,13 @@ const mockTalent: Talent = {
   updatedAt: new Date(),
 }
 
-const mockEvaluation: MatchingEvaluation = {
+const mockEvaluation: ClaudeResponse = {
   score: 88,
   skillMatchRate: 90,
   unitPriceOk: true,
   timingOk: true,
   locationOk: true,
-  costPrice: 75,
-  sellPrice: 80,
-  grossProfitRate: 0.0625,
-  grossProfitOk: false,
   reason: 'Javaスキルが一致しており、勤務形態・時期も適合しています。',
-  isAutoSend: false,
 }
 
 beforeEach(() => jest.clearAllMocks())
@@ -80,9 +77,18 @@ describe('evaluateMatching', () => {
     await evaluateMatching(mockCase, mockTalent)
     const calledContent = mockCreate.mock.calls[0][0].messages[0].content as string
     expect(calledContent).toContain('Javaエンジニア募集')
-    expect(calledContent).toContain('田中 浩二')
     expect(calledContent).toContain('80万円')
     expect(calledContent).toContain('75万円')
+  })
+
+  it('calculates costPrice, sellPrice, grossProfitRate, grossProfitOk, isAutoSend from data', async () => {
+    mockCreate.mockResolvedValueOnce(makeToolUseResponse(mockEvaluation))
+    const result = await evaluateMatching(mockCase, mockTalent)
+    expect(result.costPrice).toBe(75)       // talent.desiredRate
+    expect(result.sellPrice).toBe(80)       // case.unitPrice
+    expect(result.grossProfitRate).toBeCloseTo(6.25) // (80-75)/80*100
+    expect(result.grossProfitOk).toBe(false) // 6.25 < 10
+    expect(result.isAutoSend).toBe(true)    // score>=85 && all ok
   })
 
   it('retries once on API failure and throws after second failure', async () => {
