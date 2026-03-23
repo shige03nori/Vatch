@@ -223,9 +223,13 @@ export default function MatchingPage() {
     }
     setProposalSending(true)
     try {
-      await navigator.clipboard.writeText(
-        `宛先: ${proposalTo}\n件名: ${proposalSubject}\n\n${proposalBody}`
-      )
+      // メール送信（失敗してもマッチング更新は続行）
+      const sendRes = await fetch('/api/emails/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: proposalTo, subject: proposalSubject, bodyText: proposalBody }),
+      })
+      if (!sendRes.ok) console.warn('メール送信に失敗しました（マッチング更新は続行）')
 
       // Proposal レコードを作成（失敗してもマッチング更新は続行）
       const proposalRes = await fetch('/api/proposals', {
@@ -469,7 +473,7 @@ export default function MatchingPage() {
                     disabled={proposalSending}
                     className="px-4 py-2 text-sm font-bold rounded-lg bg-vatch-cyan text-vatch-bg hover:bg-vatch-cyan/90 transition-colors disabled:opacity-50"
                   >
-                    {proposalSending ? '処理中...' : 'コピーして送信済みにする'}
+                    {proposalSending ? '送信中...' : '送信する'}
                   </button>
                 </div>
               </div>
