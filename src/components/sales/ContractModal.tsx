@@ -52,11 +52,12 @@ export function ContractModal({ matching, onClose, onContracted }: Props) {
       })
       if (!res.ok) throw new Error('成約登録失敗')
 
-      await fetch(`/api/matchings/${matching.id}`, {
+      const patchRes = await fetch(`/api/matchings/${matching.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'CONTRACTED' }),
       })
+      if (!patchRes.ok) throw new Error('ステータス更新失敗')
 
       onContracted(matching.id)
     } catch {
