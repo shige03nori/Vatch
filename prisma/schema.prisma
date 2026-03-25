@@ -199,6 +199,7 @@ model Matching {
   grossProfitRate Float
   grossProfitOk   Boolean
   reason          String?        @db.Text
+  memo            String?        @db.Text
   isAutoSend      Boolean        @default(false)
   status          MatchingStatus @default(UNPROPOSED)
 
@@ -316,6 +317,8 @@ enum ActivityLogType {
   PROPOSAL_REPLIED
   CONTRACT_CREATED
   CONTRACT_RENEWED
+  STAGE_CHANGED
+  MEMO_UPDATED
 }
 
 model EmailSource {
