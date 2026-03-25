@@ -33,7 +33,7 @@ export default function LoginPage() {
 
     try {
       const result = await signIn('credentials', { email, password, redirect: false })
-      if (result?.ok === false) {
+      if (!result?.ok) {
         setErrors({ password: 'メールアドレスまたはパスワードが正しくありません' })
       } else {
         router.push('/dashboard')
