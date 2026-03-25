@@ -11,3 +11,31 @@ html, body {
 * {
   box-sizing: border-box;
 }
+
+/* スクロールバー幅を常に確保してレイアウトシフトを防ぐ */
+.overflow-y-auto {
+  scrollbar-gutter: stable;
+}
+
+/* カスタムスクロールバー */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(56, 189, 248, 0.25);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(56, 189, 248, 0.5);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}

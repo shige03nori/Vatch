@@ -88,9 +88,11 @@ model Email {
   extractedName String?
   confidence    Int?
   s3Key         String?
+  messageId     String?     @unique
 
-  cases   Case[]   @relation("EmailToCase")
-  talents Talent[] @relation("EmailToTalent")
+  cases      Case[]        @relation("EmailToCase")
+  talents    Talent[]      @relation("EmailToTalent")
+  activities ActivityLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -99,6 +101,7 @@ model Email {
 enum EmailType {
   CASE
   TALENT
+  UNKNOWN
 }
 
 enum EmailStatus {
@@ -291,12 +294,14 @@ model ActivityLog {
   talentId    String?
   matchingId  String?
   proposalId  String?
+  emailId     String?
 
   user     User?     @relation(fields: [userId], references: [id])
   case     Case?     @relation(fields: [caseId], references: [id])
   talent   Talent?   @relation(fields: [talentId], references: [id])
   matching Matching? @relation(fields: [matchingId], references: [id])
   proposal Proposal? @relation(fields: [proposalId], references: [id])
+  email    Email?    @relation(fields: [emailId], references: [id])
 
   createdAt DateTime @default(now())
 }
@@ -311,4 +316,17 @@ enum ActivityLogType {
   PROPOSAL_REPLIED
   CONTRACT_CREATED
   CONTRACT_RENEWED
+}
+
+model EmailSource {
+  id        String   @id @default(cuid())
+  label     String
+  imapHost  String
+  imapPort  Int      @default(993)
+  imapUser  String
+  imapPass  String
+  isActive  Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

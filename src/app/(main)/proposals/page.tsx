@@ -1,52 +1,59 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Topbar } from '@/components/layout/Topbar'
-import { proposalQueue, currentProposal, type ProposalItem } from '@/data/proposals'
 
-const EMAIL_BODY = `件名: 【ご提案】Javaエンジニア ご紹介の件
+// ── 型定義 ──────────────────────────────────────────────────────────────────
 
-○○株式会社
-採用担当 △△様
+type ProposalStatus = 'DRAFT' | 'PENDING_AUTO' | 'SENT' | 'REPLIED' | 'REJECTED'
 
-お世話になっております。
-VICENT株式会社の山田でございます。
-
-この度は、貴社のJavaエンジニア案件に対して、
-弊社にてご支援できる人材をご紹介させていただきたく、
-ご連絡いたしました。
-
-【ご紹介人材】
-氏名: 田中 K. 様
-スキル: Java / Spring Boot / AWS / PostgreSQL
-経験年数: 8年
-直近実績: 大手金融系システム開発（3年）
-
-【マッチングポイント】
-・必須スキル（Java/Spring）を保有
-・金融系システム経験あり（エンド業界適合）
-・フルリモート対応可能
-・参画可能日: 2026年4月1日〜
-
-ご検討のほど、よろしくお願いいたします。
-詳細につきましては、添付の経歴書をご確認ください。
-
-VICENT株式会社
-山田 太郎`
-
-const STATUS_STYLES: Record<ProposalItem['status'], string> = {
-  '下書き': 'bg-vatch-muted-dark text-vatch-text-dim',
-  '提案中': 'bg-blue-900/60 text-blue-300',
-  '自動送信待ち': 'bg-cyan-900/60 text-vatch-cyan',
-  '返答待ち': 'bg-amber-900/60 text-vatch-amber',
-  '提案済み': 'bg-green-900/60 text-vatch-green',
+type ProposalItem = {
+  id: string
+  to: string
+  cc: string | null
+  subject: string
+  bodyText: string
+  status: ProposalStatus
+  isAutoSend: boolean
+  costPrice: number       // 万円整数
+  sellPrice: number       // 万円整数
+  grossProfitRate: number // パーセンテージ値（例: 17.6）
+  sentAt: string | null
+  createdAt: string
+  matching: {
+    id: string
+    score: number
+    reason: string | null
+    case: { id: string; title: string; client: string; unitPrice: number }
+    talent: { id: string; name: string; skills: string[]; desiredRate: number }
+  }
 }
 
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+const STATUS_LABEL: Record<ProposalStatus, string> = {
+  DRAFT:        '下書き',
+  PENDING_AUTO: '自動送信待ち',
+  SENT:         '提案中',
+  REPLIED:      '返答あり',
+  REJECTED:     '不採用',
+}
+
+const STATUS_STYLES: Record<ProposalStatus, string> = {
+  DRAFT:        'bg-slate-700/60 text-slate-300',
+  PENDING_AUTO: 'bg-cyan-900/60 text-cyan-300',
+  SENT:         'bg-blue-900/60 text-blue-300',
+  REPLIED:      'bg-amber-900/60 text-amber-300',
+  REJECTED:     'bg-red-900/60 text-red-300',
+}
+
+// ── GrossProfitBar ────────────────────────────────────────────────────────────
+
 function GrossProfitBar({ rate }: { rate: number }) {
+  // rate はパーセンテージ値（例: 17.6）
   const isOk = rate >= 10
   const capped = Math.min(rate, 30)
   const barWidth = `${(capped / 30) * 100}%`
-
   return (
     <div className="w-full h-2 rounded-full bg-vatch-border mt-1.5">
       <div
@@ -57,22 +64,7 @@ function GrossProfitBar({ rate }: { rate: number }) {
   )
 }
 
-function AttachmentChip({ name, type }: { name: string; type: 'pdf' | 'xlsx' }) {
-  return (
-    <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-vatch-border-light bg-vatch-bg text-[11px] text-vatch-text-dim">
-      {type === 'pdf' ? (
-        <svg className="w-3.5 h-3.5 text-red-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
-        </svg>
-      ) : (
-        <svg className="w-3.5 h-3.5 text-green-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
-        </svg>
-      )}
-      <span>{name}</span>
-    </div>
-  )
-}
+// ── QueueItem ─────────────────────────────────────────────────────────────────
 
 function QueueItem({
   item,
@@ -83,6 +75,7 @@ function QueueItem({
   isActive: boolean
   onClick: () => void
 }) {
+  const pct = Math.round(item.grossProfitRate)
   return (
     <button
       onClick={onClick}
@@ -94,40 +87,139 @@ function QueueItem({
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold text-vatch-text-bright truncate">{item.caseName}</p>
-          <p className="text-[10px] text-vatch-muted mt-0.5">{item.caseCompany} / {item.talentName}</p>
+          <p className="text-[11px] font-semibold text-vatch-text-bright truncate">
+            {item.matching.case.title}
+          </p>
+          <p className="text-[10px] text-vatch-muted mt-0.5">
+            {item.matching.case.client} / {item.matching.talent.name}
+          </p>
         </div>
         <span className={`flex-shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${STATUS_STYLES[item.status]}`}>
-          {item.status}
+          {STATUS_LABEL[item.status]}
         </span>
       </div>
       <div className="flex items-center gap-2 mt-1.5">
-        <span className="text-[10px] text-vatch-cyan font-bold">AI {item.score}%</span>
+        <span className="text-[10px] text-vatch-cyan font-bold">AI {item.matching.score}%</span>
         <span className={`text-[10px] font-semibold ${item.grossProfitRate >= 10 ? 'text-vatch-green' : 'text-vatch-red'}`}>
-          粗利 {item.grossProfitRate}%
+          粗利 {pct}%
         </span>
       </div>
     </button>
   )
 }
 
-export default function ProposalsPage() {
-  const [selected, setSelected] = useState<ProposalItem>(currentProposal)
-  const [autoSend, setAutoSend] = useState(selected.isAutoSend)
-  const [toValue, setToValue] = useState(selected.to)
-  const [ccValue, setCcValue] = useState('yamada@vicent.co.jp')
-  const [subjectValue, setSubjectValue] = useState(selected.subject)
-  const [bodyValue, setBodyValue] = useState(EMAIL_BODY)
+// ── Page ─────────────────────────────────────────────────────────────────────
 
-  const handleSelect = (item: ProposalItem) => {
+export default function ProposalsPage() {
+  const [proposals, setProposals] = useState<ProposalItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState<ProposalItem | null>(null)
+  const [toValue, setToValue] = useState('')
+  const [ccValue, setCcValue] = useState('')
+  const [subjectValue, setSubjectValue] = useState('')
+  const [bodyValue, setBodyValue] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  function handleSelect(item: ProposalItem) {
     setSelected(item)
-    setAutoSend(item.isAutoSend)
     setToValue(item.to)
+    setCcValue(item.cc ?? '')
     setSubjectValue(item.subject)
+    setBodyValue(item.bodyText)
   }
 
-  const grossProfit = selected.sellPrice - selected.costPrice
+  async function loadProposals(currentSelectedId?: string) {
+    try {
+      const res = await fetch('/api/proposals?limit=100')
+      const json = await res.json()
+      const data: ProposalItem[] = json.data ?? []
+      setProposals(data)
+      if (currentSelectedId) {
+        const refreshed = data.find((p) => p.id === currentSelectedId)
+        if (refreshed) handleSelect(refreshed)
+      } else if (data.length > 0) {
+        handleSelect(data[0])
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadProposals() }, [])
+
+  async function handleSave() {
+    if (!selected || saving) return
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/proposals/${selected.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subject: subjectValue, bodyText: bodyValue }),
+      })
+      if (!res.ok) throw new Error()
+      await loadProposals(selected.id)
+    } catch {
+      alert('保存に失敗しました')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleStatusUpdate(status: 'REPLIED' | 'REJECTED') {
+    if (!selected || saving) return
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/proposals/${selected.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      if (!res.ok) throw new Error()
+      await loadProposals(selected.id)
+    } catch {
+      alert('ステータスの更新に失敗しました')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(bodyValue)
+    } catch {
+      alert('クリップボードへのコピーに失敗しました')
+    }
+  }
+
+  if (loading) {
+    return (
+      <>
+        <Topbar title="提案メール確認" subtitle="AI生成メール / 粗利チェック / 自動送信" />
+        <main className="flex-1 overflow-y-auto p-4 flex items-center justify-center">
+          <span className="text-vatch-muted text-sm">読み込み中...</span>
+        </main>
+      </>
+    )
+  }
+
+  if (proposals.length === 0 || !selected) {
+    return (
+      <>
+        <Topbar title="提案メール確認" subtitle="AI生成メール / 粗利チェック / 自動送信" />
+        <main className="flex-1 overflow-y-auto p-4 flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-vatch-muted text-sm">提案データがありません</p>
+            <p className="text-vatch-muted-dark text-[11px] mt-1">マッチング画面から「提案する」を実行してください</p>
+          </div>
+        </main>
+      </>
+    )
+  }
+
+  const grossProfitPct = selected.grossProfitRate.toFixed(1)
   const isMarginOk = selected.grossProfitRate >= 10
+  const grossProfitAmt = selected.sellPrice - selected.costPrice
 
   return (
     <>
@@ -135,14 +227,14 @@ export default function ProposalsPage() {
       <main className="flex-1 overflow-y-auto p-4">
         <div className="flex gap-3 h-full min-h-0">
 
-          {/* ── Queue sidebar ───────────────────────────────── */}
+          {/* ── Queue sidebar ───────────────────────────────────── */}
           <aside className="w-[200px] flex-shrink-0 flex flex-col gap-2">
             <div className="flex items-center justify-between mb-0.5">
               <span className="text-[11px] font-bold text-vatch-text-dim uppercase tracking-wider">送信キュー</span>
-              <span className="text-[10px] text-vatch-cyan font-semibold">{proposalQueue.length}件</span>
+              <span className="text-[10px] text-vatch-cyan font-semibold">{proposals.length}件</span>
             </div>
             <div className="flex flex-col gap-1.5 overflow-y-auto">
-              {proposalQueue.map((item) => (
+              {proposals.map((item) => (
                 <QueueItem
                   key={item.id}
                   item={item}
@@ -153,10 +245,8 @@ export default function ProposalsPage() {
             </div>
           </aside>
 
-          {/* ── Left: Email composition ─────────────────────── */}
+          {/* ── Left: Email composition ─────────────────────────── */}
           <section className="flex-1 min-w-0 flex flex-col gap-3">
-
-            {/* Email card */}
             <div className="flex-1 flex flex-col bg-vatch-surface border border-vatch-border rounded-xl overflow-hidden">
 
               {/* Card header */}
@@ -165,11 +255,13 @@ export default function ProposalsPage() {
                   <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-950 border border-cyan-800/60 text-[10px] font-bold text-vatch-cyan">
                     ⚡ AI Generated
                   </span>
-                  <span className="text-[10px] text-vatch-muted">生成日時: 09:42</span>
+                  <span className="text-[10px] text-vatch-muted">
+                    作成日: {new Date(selected.createdAt).toLocaleDateString('ja-JP')}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] text-vatch-muted-dark">AIスコア</span>
-                  <span className="text-sm font-bold text-vatch-cyan">{selected.score}%</span>
+                  <span className="text-sm font-bold text-vatch-cyan">{selected.matching.score}%</span>
                 </div>
               </div>
 
@@ -184,7 +276,9 @@ export default function ProposalsPage() {
                     onChange={(e) => setToValue(e.target.value)}
                     className="flex-1 bg-transparent text-[12px] text-vatch-text outline-none placeholder:text-vatch-muted-dark"
                   />
-                  <span className="text-[10px] text-vatch-muted-dark px-2 py-0.5 rounded bg-vatch-border/60">{selected.caseCompany}</span>
+                  <span className="text-[10px] text-vatch-muted-dark px-2 py-0.5 rounded bg-vatch-border/60">
+                    {selected.matching.case.client}
+                  </span>
                 </div>
                 {/* CC */}
                 <div className="flex items-center gap-3 px-4 py-2">
@@ -224,21 +318,20 @@ export default function ProposalsPage() {
                 />
               </div>
 
-              {/* Attachments */}
-              <div className="flex items-center gap-3 px-4 py-2.5 border-t border-vatch-border bg-vatch-bg/40">
-                <span className="text-[11px] font-semibold text-vatch-muted w-16 flex-shrink-0">添付ファイル</span>
-                <div className="flex items-center gap-2">
-                  <AttachmentChip name="経歴書.pdf" type="pdf" />
-                  <AttachmentChip name="スキルシート.xlsx" type="xlsx" />
-                </div>
-                <button className="ml-auto text-[10px] text-vatch-muted hover:text-vatch-text-dim transition-colors">
-                  + 追加
+              {/* Save footer */}
+              <div className="flex items-center justify-end px-4 py-2.5 border-t border-vatch-border bg-vatch-bg/40">
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="px-4 py-1.5 text-[12px] font-semibold rounded-lg border border-vatch-border-light text-vatch-text-dim hover:text-vatch-text hover:border-vatch-muted transition-colors disabled:opacity-50"
+                >
+                  {saving ? '保存中...' : '保存'}
                 </button>
               </div>
             </div>
           </section>
 
-          {/* ── Right: Gross profit + Send controls ─────────── */}
+          {/* ── Right: Gross profit + Controls ──────────────────── */}
           <aside className="w-[260px] flex-shrink-0 flex flex-col gap-3">
 
             {/* Gross profit panel */}
@@ -249,8 +342,6 @@ export default function ProposalsPage() {
                   {isMarginOk ? '✓ 基準適合' : '✗ 要確認'}
                 </span>
               </div>
-
-              {/* Warning banner */}
               {!isMarginOk && (
                 <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-950/60 border border-red-800/50">
                   <span className="text-sm">⚠️</span>
@@ -259,12 +350,10 @@ export default function ProposalsPage() {
                   </span>
                 </div>
               )}
-
-              {/* Gross margin — large display */}
               <div className="flex flex-col items-center py-2">
                 <span className="text-[11px] text-vatch-muted mb-1">粗利率</span>
                 <span className={`text-4xl font-black tabular-nums ${isMarginOk ? 'text-vatch-green' : 'text-vatch-red'}`}>
-                  {selected.grossProfitRate}%
+                  {grossProfitPct}%
                 </span>
                 <GrossProfitBar rate={selected.grossProfitRate} />
                 <div className="flex justify-between w-full mt-1">
@@ -273,25 +362,19 @@ export default function ProposalsPage() {
                   <span className="text-[9px] text-vatch-muted-dark">30%</span>
                 </div>
               </div>
-
-              {/* Price breakdown */}
               <div className="flex flex-col gap-1.5 bg-vatch-bg/60 rounded-lg px-3 py-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] text-vatch-muted">仕入値</span>
-                  <span className="text-[12px] text-vatch-text font-mono">
-                    ¥{selected.costPrice.toLocaleString()}
-                  </span>
+                  <span className="text-[12px] text-vatch-text font-mono">{selected.costPrice}万円</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] text-vatch-muted">売値</span>
-                  <span className="text-[12px] text-vatch-text font-mono">
-                    ¥{selected.sellPrice.toLocaleString()}
-                  </span>
+                  <span className="text-[12px] text-vatch-text font-mono">{selected.sellPrice}万円</span>
                 </div>
                 <div className="border-t border-vatch-border pt-1.5 flex items-center justify-between">
                   <span className="text-[11px] font-semibold text-vatch-text-dim">粗利額</span>
                   <span className={`text-[13px] font-bold font-mono ${isMarginOk ? 'text-vatch-green' : 'text-vatch-red'}`}>
-                    ¥{grossProfit.toLocaleString()}
+                    {grossProfitAmt}万円
                   </span>
                 </div>
               </div>
@@ -304,82 +387,56 @@ export default function ProposalsPage() {
                 <div className="flex items-start justify-between gap-2">
                   <span className="text-[10px] text-vatch-muted flex-shrink-0">案件</span>
                   <span className="text-[11px] text-vatch-text text-right leading-snug">
-                    {selected.caseName} / {selected.caseCompany}
+                    {selected.matching.case.title} / {selected.matching.case.client}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-vatch-muted">人材</span>
                   <span className="text-[11px] text-vatch-text">
-                    {selected.talentName} ({selected.talentSkill})
+                    {selected.matching.talent.name}
+                    {selected.matching.talent.skills.length > 0 && (
+                      <span className="text-vatch-muted"> ({selected.matching.talent.skills.slice(0, 2).join(', ')})</span>
+                    )}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-vatch-muted">AIスコア</span>
-                  <span className="text-[12px] font-bold text-vatch-cyan">{selected.score}%</span>
+                  <span className="text-[12px] font-bold text-vatch-cyan">{selected.matching.score}%</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-vatch-muted">ステータス</span>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_STYLES[selected.status]}`}>
-                    {selected.status}
+                    {STATUS_LABEL[selected.status]}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Send controls */}
+            {/* Action panel */}
             <div className="bg-vatch-surface border border-vatch-border rounded-xl p-4 flex flex-col gap-3">
-              <span className="text-[11px] font-bold text-vatch-text-dim uppercase tracking-wider">送信設定</span>
-
-              {/* Auto-send toggle */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[12px] font-semibold text-vatch-text">自動送信</p>
-                  <p className="text-[10px] text-vatch-muted mt-0.5">
-                    {autoSend ? '有効 — スケジュール送信' : '無効 — 手動送信のみ'}
-                  </p>
-                </div>
+              <span className="text-[11px] font-bold text-vatch-text-dim uppercase tracking-wider">アクション</span>
+              <div className="flex flex-col gap-2">
                 <button
-                  onClick={() => setAutoSend(!autoSend)}
-                  className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${autoSend ? 'bg-vatch-green' : 'bg-vatch-muted-dark'}`}
+                  onClick={handleCopy}
+                  className="w-full py-2 rounded-lg border border-vatch-border-light text-[12px] font-semibold text-vatch-text-dim hover:text-vatch-text hover:border-vatch-muted transition-colors"
                 >
-                  <span
-                    className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${autoSend ? 'left-[22px]' : 'left-0.5'}`}
-                  />
-                </button>
-              </div>
-
-              {/* Auto-send indicator */}
-              {autoSend && (
-                <div className="flex items-center gap-1.5 text-[10px] text-vatch-green bg-green-950/40 border border-green-900/40 rounded-lg px-2.5 py-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-vatch-green animate-pulse flex-shrink-0" />
-                  自動送信 ON — スケジュール済み
-                </div>
-              )}
-
-              {/* Action buttons */}
-              <div className="flex flex-col gap-2 pt-1">
-                <button className="w-full py-2 rounded-lg border border-vatch-border-light text-[12px] font-semibold text-vatch-text-dim hover:text-vatch-text hover:border-vatch-muted transition-colors">
-                  下書き保存
-                </button>
-                <button className="w-full py-2 rounded-lg bg-blue-700 hover:bg-blue-600 text-[12px] font-semibold text-white transition-colors">
-                  手動送信
+                  📋 本文コピー
                 </button>
                 <button
-                  disabled={!autoSend}
-                  className={`w-full py-2.5 rounded-lg text-[12px] font-bold transition-all ${
-                    autoSend
-                      ? 'bg-gradient-to-r from-vatch-cyan to-blue-500 hover:from-cyan-300 hover:to-blue-400 text-vatch-bg shadow-lg shadow-cyan-900/40'
-                      : 'bg-vatch-border text-vatch-muted-dark cursor-not-allowed'
-                  }`}
+                  onClick={() => handleStatusUpdate('REPLIED')}
+                  disabled={saving || selected.status !== 'SENT'}
+                  className="w-full py-2 rounded-lg bg-amber-900/40 border border-amber-700/60 text-[12px] font-semibold text-amber-300 hover:bg-amber-900/60 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  ⚡ 自動送信実行
+                  ↩ 返答あり
+                </button>
+                <button
+                  onClick={() => handleStatusUpdate('REJECTED')}
+                  disabled={saving || !['SENT', 'REPLIED'].includes(selected.status)}
+                  className="w-full py-2 rounded-lg bg-red-900/40 border border-red-700/60 text-[12px] font-semibold text-red-300 hover:bg-red-900/60 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  ✗ 不採用
                 </button>
               </div>
-
-              {/* Log note */}
-              <p className="text-[10px] text-vatch-muted text-center">
-                送信後、履歴に記録されます
-              </p>
             </div>
 
           </aside>

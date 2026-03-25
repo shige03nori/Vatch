@@ -50,6 +50,29 @@ describe('GET /api/proposals', () => {
       })
     )
   })
+
+  it('returns proposals with nested matching, case and talent', async () => {
+    mockAuth.mockResolvedValueOnce(adminSession)
+    mockFindMany.mockResolvedValueOnce([{
+      id: 'p1',
+      matching: {
+        id: 'm1',
+        score: 90,
+        reason: 'スキル一致',
+        case:   { id: 'c1', title: 'React Dev', client: 'ACME', unitPrice: 70 },
+        talent: { id: 't1', name: '田中', skills: ['React'], desiredRate: 60 },
+      },
+    }])
+    mockCount.mockResolvedValueOnce(1)
+    await GET(new Request('http://localhost/api/proposals'))
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({
+          matching: expect.anything(),
+        }),
+      })
+    )
+  })
 })
 
 describe('POST /api/proposals', () => {
@@ -86,5 +109,29 @@ describe('POST /api/proposals', () => {
       }),
     })
     expect((await POST(req)).status).toBe(201)
+  })
+
+  it('creates a proposal with status SENT', async () => {
+    mockAuth.mockResolvedValueOnce(adminSession)
+    mockCreate.mockResolvedValueOnce({ id: 'p2', status: 'SENT' })
+    const req = new Request('http://localhost/api/proposals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        matchingId:      'clh5u5vw00000356ng7nc4l12',
+        to:              'client@example.com',
+        subject:         'Test Proposal',
+        bodyText:        'Dear client...',
+        status:          'SENT',
+        costPrice:       60,
+        sellPrice:       80,
+        grossProfitRate: 0.25,
+      }),
+    })
+    const res = await POST(req)
+    expect(res.status).toBe(201)
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'SENT' }) })
+    )
   })
 })
