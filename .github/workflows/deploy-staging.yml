@@ -17,6 +17,6 @@ jobs:
 
       - uses: superfly/flyctl-actions/setup-flyctl@v1
 
-      - run: flyctl deploy --remote-only
+      - run: flyctl deploy --remote-only --app vatch-staging
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
