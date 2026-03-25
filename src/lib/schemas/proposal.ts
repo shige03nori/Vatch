@@ -7,6 +7,7 @@ export const CreateProposalSchema = z.object({
   cc:              z.string().email().optional(),
   subject:         z.string().min(1),
   bodyText:        z.string().min(1),
+  status:          z.enum(['DRAFT','PENDING_AUTO','SENT','REPLIED','REJECTED']).default('DRAFT'),
   costPrice:       z.number().int().positive(),
   sellPrice:       z.number().int().positive(),
   grossProfitRate: z.number(),

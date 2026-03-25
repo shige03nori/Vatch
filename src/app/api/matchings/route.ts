@@ -24,7 +24,16 @@ export async function GET(request: Request): Promise<NextResponse> {
 
   try {
     const [data, total] = await Promise.all([
-      prisma.matching.findMany({ where, skip: (page - 1) * limit, take: limit, orderBy: { createdAt: 'desc' } }),
+      prisma.matching.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          case:   { select: { id: true, title: true, client: true, unitPrice: true, workStyle: true, startDate: true } },
+          talent: { select: { id: true, name: true, skills: true, desiredRate: true, agencyEmail: true } },
+        },
+      }),
       prisma.matching.count({ where }),
     ])
     return ok(data, { total, page, limit })

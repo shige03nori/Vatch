@@ -26,5 +26,5 @@ export const MatchingQuerySchema = z.object({
   talentId: z.string().cuid().optional(),
   status:   z.enum(['UNPROPOSED','PENDING_AUTO','SENT','REPLIED','INTERVIEWING','CONTRACTED','REJECTED']).optional(),
   page:     z.coerce.number().min(1).default(1),
-  limit:    z.coerce.number().min(1).max(100).default(20),
+  limit:    z.coerce.number().min(1).max(500).default(20),
 })

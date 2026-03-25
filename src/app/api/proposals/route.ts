@@ -22,7 +22,20 @@ export async function GET(request: Request): Promise<NextResponse> {
 
   try {
     const [data, total] = await Promise.all([
-      prisma.proposal.findMany({ where, skip: (page - 1) * limit, take: limit, orderBy: { createdAt: 'desc' } }),
+      prisma.proposal.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          matching: {
+            include: {
+              case:   { select: { id: true, title: true, client: true, unitPrice: true } },
+              talent: { select: { id: true, name: true, skills: true, desiredRate: true } },
+            },
+          },
+        },
+      }),
       prisma.proposal.count({ where }),
     ])
     return ok(data, { total, page, limit })

@@ -48,6 +48,35 @@ describe('GET /api/matchings', () => {
       expect.objectContaining({ where: expect.objectContaining({ case: { assignedUserId: 'staff-id' } }) })
     )
   })
+
+  it('includes case and talent in response', async () => {
+    mockAuth.mockResolvedValueOnce(adminSession)
+    mockFindMany.mockResolvedValueOnce([{
+      id: 'm1',
+      case: { id: 'c1', title: 'Test Case', client: 'Client A', unitPrice: 80, workStyle: 'REMOTE', startDate: new Date('2026-04-01') },
+      talent: { id: 't1', name: '田中', skills: ['Java'], desiredRate: 75, agencyEmail: null },
+    }])
+    mockCount.mockResolvedValueOnce(1)
+    const res = await GET(new Request('http://localhost/api/matchings'))
+    const body = await res.json()
+    expect(body.data[0].case.title).toBe('Test Case')
+    expect(body.data[0].talent.name).toBe('田中')
+  })
+
+  it('calls findMany with include for case and talent', async () => {
+    mockAuth.mockResolvedValueOnce(adminSession)
+    mockFindMany.mockResolvedValueOnce([])
+    mockCount.mockResolvedValueOnce(0)
+    await GET(new Request('http://localhost/api/matchings'))
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({
+          case: expect.any(Object),
+          talent: expect.any(Object),
+        }),
+      })
+    )
+  })
 })
 
 describe('POST /api/matchings', () => {

@@ -1,3 +1,387 @@
+# 提案メール画面 Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** 提案メール画面をモックデータから実 API に接続し、マッチング画面から Proposal レコードを作成・管理できるようにする。
+
+**Architecture:** マッチング画面の「コピーして送信済みにする」ボタン押下時に `POST /api/proposals` で Proposal レコードを status=SENT で作成する。提案メール画面は `GET /api/proposals`（matching/case/talent ネスト付き）から取得した一覧を左サイドバーに表示し、右パネルで本文編集・ステータス更新を行う。
+
+**Tech Stack:** Next.js 14 App Router, TypeScript, Prisma (PostgreSQL), Zod, Jest
+
+---
+
+## ファイル構成
+
+| ファイル | 変更 |
+|---|---|
+| `src/lib/schemas/proposal.ts` | `CreateProposalSchema` に `status` フィールド追加 |
+| `src/app/api/proposals/route.ts` | GET の `findMany` に `include` 追加 |
+| `src/app/api/proposals/__tests__/route.test.ts` | include 対応テスト追加 |
+| `src/app/(main)/matching/page.tsx` | `MatchingItem` 型拡張 + `handleProposalSend` で `POST /api/proposals` 呼び出し |
+| `src/app/(main)/proposals/page.tsx` | 全面書き直し（モックデータ → 実 API） |
+| `src/data/proposals.ts` | 削除 |
+
+---
+
+## Task 1: CreateProposalSchema に status フィールドを追加
+
+**Files:**
+- Modify: `src/lib/schemas/proposal.ts`
+- Test: `src/app/api/proposals/__tests__/route.test.ts`（既存テストの確認）
+
+### 背景
+
+現行の `CreateProposalSchema` に `status` フィールドがないため、`POST /api/proposals` 時に `status: 'SENT'` を送信しても Zod の `strip` で除去され、DB のデフォルト値 `DRAFT` で作成されてしまう。マッチング画面から「コピーして送信済みにする」を押した際は `status: 'SENT'` で作成する必要がある。
+
+- [ ] **Step 1: 現行スキーマを確認**
+
+`src/lib/schemas/proposal.ts` を読んで現行の `CreateProposalSchema` を確認する。
+
+- [ ] **Step 2: `status` フィールドを追加**
+
+`src/lib/schemas/proposal.ts` の `CreateProposalSchema` を以下に更新する：
+
+```ts
+// src/lib/schemas/proposal.ts
+import { z } from 'zod'
+
+export const CreateProposalSchema = z.object({
+  matchingId:      z.string().cuid(),
+  to:              z.string().email(),
+  cc:              z.string().email().optional(),
+  subject:         z.string().min(1),
+  bodyText:        z.string().min(1),
+  status:          z.enum(['DRAFT','PENDING_AUTO','SENT','REPLIED','REJECTED']).default('DRAFT'),
+  costPrice:       z.number().int().positive(),
+  sellPrice:       z.number().int().positive(),
+  grossProfitRate: z.number(),
+  isAutoSend:      z.boolean().default(false),
+})
+
+export const UpdateProposalSchema = z.object({
+  status:   z.enum(['DRAFT','PENDING_AUTO','SENT','REPLIED','REJECTED']).optional(),
+  subject:  z.string().min(1).optional(),
+  bodyText: z.string().min(1).optional(),
+  sentAt:   z.coerce.date().optional(),
+})
+
+export const ProposalQuerySchema = z.object({
+  status: z.enum(['DRAFT','PENDING_AUTO','SENT','REPLIED','REJECTED']).optional(),
+  page:   z.coerce.number().min(1).default(1),
+  limit:  z.coerce.number().min(1).max(100).default(20),
+})
+```
+
+- [ ] **Step 3: 既存テストが通るか確認**
+
+```bash
+npx jest src/app/api/proposals/__tests__/route.test.ts --no-coverage
+```
+
+Expected: PASS（既存3テストはすべて通る。`status` はオプショナルでデフォルト `DRAFT` なので後方互換）
+
+- [ ] **Step 4: `status: 'SENT'` を受け付けるテストを追加**
+
+`src/app/api/proposals/__tests__/route.test.ts` の `describe('POST /api/proposals', ...)` ブロック内に以下を追加：
+
+```ts
+it('creates a proposal with status SENT', async () => {
+  mockAuth.mockResolvedValueOnce(adminSession)
+  mockCreate.mockResolvedValueOnce({ id: 'p2', status: 'SENT' })
+  const req = new Request('http://localhost/api/proposals', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      matchingId:      'clh5u5vw00000356ng7nc4l12',
+      to:              'client@example.com',
+      subject:         'Test Proposal',
+      bodyText:        'Dear client...',
+      status:          'SENT',
+      costPrice:       60,
+      sellPrice:       80,
+      grossProfitRate: 0.25,
+    }),
+  })
+  const res = await POST(req)
+  expect(res.status).toBe(201)
+  expect(mockCreate).toHaveBeenCalledWith(
+    expect.objectContaining({ data: expect.objectContaining({ status: 'SENT' }) })
+  )
+})
+```
+
+- [ ] **Step 5: テスト実行（追加テストも含む）**
+
+```bash
+npx jest src/app/api/proposals/__tests__/route.test.ts --no-coverage
+```
+
+Expected: PASS（4テスト）
+
+- [ ] **Step 6: コミット**
+
+```bash
+git add src/lib/schemas/proposal.ts src/app/api/proposals/__tests__/route.test.ts
+git commit -m "feat: add status field to CreateProposalSchema"
+```
+
+---
+
+## Task 2: GET /api/proposals に include を追加
+
+**Files:**
+- Modify: `src/app/api/proposals/route.ts`
+- Modify: `src/app/api/proposals/__tests__/route.test.ts`
+
+### 背景
+
+現行の `GET /api/proposals` は `matching`（case/talent ネスト）を返さない。`proposals/page.tsx` で `proposal.matching.case.title` を参照するため、include が必要。
+
+- [ ] **Step 1: テストを先に書く**
+
+`src/app/api/proposals/__tests__/route.test.ts` の `describe('GET /api/proposals', ...)` ブロックに以下を追加：
+
+```ts
+it('returns proposals with nested matching, case and talent', async () => {
+  mockAuth.mockResolvedValueOnce(adminSession)
+  mockFindMany.mockResolvedValueOnce([{
+    id: 'p1',
+    matching: {
+      id: 'm1',
+      score: 90,
+      reason: 'スキル一致',
+      case:   { id: 'c1', title: 'React Dev', client: 'ACME', unitPrice: 70 },
+      talent: { id: 't1', name: '田中', skills: ['React'], desiredRate: 60 },
+    },
+  }])
+  mockCount.mockResolvedValueOnce(1)
+  await GET(new Request('http://localhost/api/proposals'))
+  expect(mockFindMany).toHaveBeenCalledWith(
+    expect.objectContaining({
+      include: expect.objectContaining({
+        matching: expect.anything(),
+      }),
+    })
+  )
+})
+```
+
+- [ ] **Step 2: テスト実行（失敗確認）**
+
+```bash
+npx jest src/app/api/proposals/__tests__/route.test.ts --no-coverage
+```
+
+Expected: FAIL — `include` が undefined で呼ばれている
+
+- [ ] **Step 3: `GET /api/proposals` の `findMany` に `include` を追加**
+
+`src/app/api/proposals/route.ts` の `findMany` 呼び出しを以下に変更：
+
+```ts
+// src/app/api/proposals/route.ts
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { ok, created, unprocessable, serverError, requireAuth } from '@/lib/api'
+import { CreateProposalSchema, ProposalQuerySchema } from '@/lib/schemas/proposal'
+
+export async function GET(request: Request): Promise<NextResponse> {
+  const authResult = await requireAuth()
+  if (authResult instanceof NextResponse) return authResult
+  const { session, isAdmin } = authResult
+
+  const { searchParams } = new URL(request.url)
+  const query = ProposalQuerySchema.safeParse(Object.fromEntries(searchParams))
+  if (!query.success) return unprocessable(query.error.issues)
+
+  const { status, page, limit } = query.data
+
+  const where = {
+    ...(isAdmin ? {} : { matching: { case: { assignedUserId: session.user.id } } }),
+    ...(status ? { status } : {}),
+  }
+
+  try {
+    const [data, total] = await Promise.all([
+      prisma.proposal.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          matching: {
+            include: {
+              case:   { select: { id: true, title: true, client: true, unitPrice: true } },
+              talent: { select: { id: true, name: true, skills: true, desiredRate: true } },
+            },
+          },
+        },
+      }),
+      prisma.proposal.count({ where }),
+    ])
+    return ok(data, { total, page, limit })
+  } catch {
+    return serverError()
+  }
+}
+
+export async function POST(request: Request): Promise<NextResponse> {
+  const authResult = await requireAuth()
+  if (authResult instanceof NextResponse) return authResult
+
+  const body = await request.json().catch(() => ({}))
+  const parsed = CreateProposalSchema.safeParse(body)
+  if (!parsed.success) return unprocessable(parsed.error.issues)
+
+  try {
+    const record = await prisma.proposal.create({ data: parsed.data })
+    return created(record)
+  } catch {
+    return serverError()
+  }
+}
+```
+
+- [ ] **Step 4: テスト実行（全件 PASS 確認）**
+
+```bash
+npx jest src/app/api/proposals/__tests__/route.test.ts --no-coverage
+```
+
+Expected: PASS（5テスト）
+
+- [ ] **Step 5: コミット**
+
+```bash
+git add src/app/api/proposals/route.ts src/app/api/proposals/__tests__/route.test.ts
+git commit -m "feat: add include matching/case/talent to GET /api/proposals"
+```
+
+---
+
+## Task 3: マッチング画面から Proposal を作成する
+
+**Files:**
+- Modify: `src/app/(main)/matching/page.tsx`
+
+### 背景
+
+現行の `handleProposalSend` はクリップボードコピー + `PATCH /api/matchings/{id}` のみ。`POST /api/proposals` を挟んで Proposal レコードを作成する。また `MatchingItem` 型に `costPrice`, `sellPrice`, `grossProfitRate` が欠けているため追加する。これらは Matching モデルの基本フィールドで、`GET /api/matchings` が自動的に返している（include 不要）。
+
+- [ ] **Step 1: `MatchingItem` 型に `costPrice`, `sellPrice`, `grossProfitRate` を追加**
+
+`src/app/(main)/matching/page.tsx` の `MatchingItem` 型定義（ファイル先頭付近、line 10）を以下に変更：
+
+```ts
+type MatchingItem = {
+  id: string
+  score: number
+  skillMatchRate: number
+  unitPriceOk: boolean
+  timingOk: boolean
+  locationOk: boolean
+  grossProfitOk: boolean
+  costPrice: number       // 万円整数
+  sellPrice: number       // 万円整数
+  grossProfitRate: number // 0.0-1.0
+  reason: string | null
+  isAutoSend: boolean
+  status: MatchingStatus
+  case: { id: string; title: string; client: string; unitPrice: number; workStyle: string; startDate: string }
+  talent: { id: string; name: string; skills: string[]; desiredRate: number; agencyEmail: string | null }
+}
+```
+
+- [ ] **Step 2: `handleProposalSend` を更新**
+
+`src/app/(main)/matching/page.tsx` の `handleProposalSend` 関数（現在 line 215–234 付近）を以下に置き換える：
+
+```ts
+async function handleProposalSend() {
+  if (!proposalTarget) return
+  setProposalSending(true)
+  try {
+    await navigator.clipboard.writeText(
+      `宛先: ${proposalTo}\n件名: ${proposalSubject}\n\n${proposalBody}`
+    )
+
+    // Proposal レコードを作成（失敗してもマッチング更新は続行）
+    const proposalRes = await fetch('/api/proposals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        matchingId:      proposalTarget.id,
+        to:              proposalTo,
+        subject:         proposalSubject,
+        bodyText:        proposalBody,
+        status:          'SENT',
+        costPrice:       proposalTarget.costPrice,
+        sellPrice:       proposalTarget.sellPrice,
+        grossProfitRate: proposalTarget.grossProfitRate,
+        isAutoSend:      false,
+      }),
+    })
+    if (!proposalRes.ok) {
+      console.warn('Proposal 作成に失敗しました（マッチング更新は続行）')
+    }
+
+    await fetch(`/api/matchings/${proposalTarget.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'SENT' }),
+    })
+    closeProposalModal()
+    await loadMatchings()
+  } catch (err) {
+    alert(`エラーが発生しました: ${err instanceof Error ? err.message : '不明なエラー'}`)
+  } finally {
+    setProposalSending(false)
+  }
+}
+```
+
+- [ ] **Step 3: TypeScript チェック**
+
+```bash
+npx tsc --noEmit
+```
+
+Expected: エラーなし（`costPrice`, `sellPrice`, `grossProfitRate` の型が `MatchingItem` と `handleProposalSend` 内で整合していることを確認）
+
+- [ ] **Step 4: 全テスト実行**
+
+```bash
+npx jest --no-coverage
+```
+
+Expected: PASS（matching 関連テストが壊れていないことを確認）
+
+- [ ] **Step 5: コミット**
+
+```bash
+git add src/app/(main)/matching/page.tsx
+git commit -m "feat: create Proposal record on proposal send in matching page"
+```
+
+---
+
+## Task 4: proposals/page.tsx を実 API に接続する
+
+**Files:**
+- Overwrite: `src/app/(main)/proposals/page.tsx`
+- Delete: `src/data/proposals.ts`
+
+### 背景
+
+現行の `proposals/page.tsx` はモックデータ（`@/data/proposals`）を使用。実 API に接続し、提案一覧・本文編集・ステータス更新を実装する。
+
+- [ ] **Step 1: `src/app/(main)/proposals/page.tsx` を書き直す**
+
+※ モックデータファイルの削除は Step 2 で行う。先に新しいページを書いてコンパイルエラーのない状態にしてから削除する。
+
+以下の内容で `src/app/(main)/proposals/page.tsx` を上書きする：
+
+```tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -17,7 +401,7 @@ type ProposalItem = {
   isAutoSend: boolean
   costPrice: number       // 万円整数
   sellPrice: number       // 万円整数
-  grossProfitRate: number // パーセンテージ値（例: 17.6）
+  grossProfitRate: number // 0.0-1.0
   sentAt: string | null
   createdAt: string
   matching: {
@@ -50,9 +434,10 @@ const STATUS_STYLES: Record<ProposalStatus, string> = {
 // ── GrossProfitBar ────────────────────────────────────────────────────────────
 
 function GrossProfitBar({ rate }: { rate: number }) {
-  // rate はパーセンテージ値（例: 17.6）
-  const isOk = rate >= 10
-  const capped = Math.min(rate, 30)
+  // rate は 0.0-1.0（DB 値）
+  const isOk = rate >= 0.1
+  const pct = rate * 100
+  const capped = Math.min(pct, 30)
   const barWidth = `${(capped / 30) * 100}%`
   return (
     <div className="w-full h-2 rounded-full bg-vatch-border mt-1.5">
@@ -75,7 +460,7 @@ function QueueItem({
   isActive: boolean
   onClick: () => void
 }) {
-  const pct = Math.round(item.grossProfitRate)
+  const pct = Math.round(item.grossProfitRate * 100)
   return (
     <button
       onClick={onClick}
@@ -100,7 +485,7 @@ function QueueItem({
       </div>
       <div className="flex items-center gap-2 mt-1.5">
         <span className="text-[10px] text-vatch-cyan font-bold">AI {item.matching.score}%</span>
-        <span className={`text-[10px] font-semibold ${item.grossProfitRate >= 10 ? 'text-vatch-green' : 'text-vatch-red'}`}>
+        <span className={`text-[10px] font-semibold ${item.grossProfitRate >= 0.1 ? 'text-vatch-green' : 'text-vatch-red'}`}>
           粗利 {pct}%
         </span>
       </div>
@@ -217,8 +602,8 @@ export default function ProposalsPage() {
     )
   }
 
-  const grossProfitPct = selected.grossProfitRate.toFixed(1)
-  const isMarginOk = selected.grossProfitRate >= 10
+  const grossProfitPct = (selected.grossProfitRate * 100).toFixed(1)
+  const isMarginOk = selected.grossProfitRate >= 0.1
   const grossProfitAmt = selected.sellPrice - selected.costPrice
 
   return (
@@ -445,3 +830,34 @@ export default function ProposalsPage() {
     </>
   )
 }
+```
+
+- [ ] **Step 2: `src/data/proposals.ts` を削除**
+
+```bash
+rm src/data/proposals.ts
+```
+
+- [ ] **Step 3: ビルドエラーがないか確認**
+
+```bash
+npx tsc --noEmit
+```
+
+Expected: エラーなし（`src/data/proposals` の import が proposals/page.tsx から消えていること）
+
+- [ ] **Step 4: 全テスト実行**
+
+```bash
+npx jest --no-coverage
+```
+
+Expected: PASS（既存テストがすべて通る）
+
+- [ ] **Step 5: コミット**
+
+```bash
+git add src/app/(main)/proposals/page.tsx
+git rm src/data/proposals.ts
+git commit -m "feat: connect proposals page to real API, delete mock data"
+```
