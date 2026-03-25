@@ -4,6 +4,7 @@ import { GET, PATCH, DELETE } from '../[id]/route'
 const mockFindUnique = jest.fn()
 const mockUpdate = jest.fn()
 const mockDelete = jest.fn()
+const mockActivityCreate = jest.fn()
 
 jest.mock('@/lib/prisma', () => ({
   prisma: {
@@ -11,6 +12,9 @@ jest.mock('@/lib/prisma', () => ({
       findUnique: (...args: unknown[]) => mockFindUnique(...args),
       update:     (...args: unknown[]) => mockUpdate(...args),
       delete:     (...args: unknown[]) => mockDelete(...args),
+    },
+    activityLog: {
+      create: (...args: unknown[]) => mockActivityCreate(...args),
     },
   },
 }))
@@ -96,5 +100,61 @@ describe('DELETE /api/matchings/[id]', () => {
     mockFindUnique.mockResolvedValueOnce({ id: 'm1' })
     mockDelete.mockResolvedValueOnce({ id: 'm1' })
     expect((await DELETE(new Request('http://localhost/api/matchings/m1'), { params })).status).toBe(200)
+  })
+})
+
+describe('PATCH /api/matchings/[id] — memo & ActivityLog', () => {
+  it('memo を更新できる', async () => {
+    mockAuth.mockResolvedValueOnce(adminSession)
+    const existing = { id: 'm1', caseId: 'case-1', talentId: 'talent-1', status: 'SENT', case: { assignedUserId: 'admin-id', id: 'case-1' } }
+    mockFindUnique.mockResolvedValueOnce(existing)
+    mockUpdate.mockResolvedValueOnce({ id: 'm1', memo: 'テストメモ' })
+    mockActivityCreate.mockResolvedValueOnce({})
+
+    const res = await PATCH(
+      new Request('http://localhost/api/matchings/m1', {
+        method: 'PATCH',
+        body: JSON.stringify({ memo: 'テストメモ' }),
+      }),
+      { params: Promise.resolve({ id: 'm1' }) }
+    )
+    expect(res.status).toBe(200)
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ memo: 'テストメモ' }) })
+    )
+  })
+
+  it('status 変更時に STAGE_CHANGED を ActivityLog に記録する', async () => {
+    mockAuth.mockResolvedValueOnce(adminSession)
+    const existing = { id: 'm1', caseId: 'case-1', talentId: 'talent-1', status: 'SENT', case: { assignedUserId: 'admin-id', id: 'case-1' } }
+    mockFindUnique.mockResolvedValueOnce(existing)
+    mockUpdate.mockResolvedValueOnce({ id: 'm1', status: 'REPLIED' })
+    mockActivityCreate.mockResolvedValueOnce({})
+
+    await PATCH(
+      new Request('http://localhost/api/matchings/m1', {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'REPLIED' }),
+      }),
+      { params: Promise.resolve({ id: 'm1' }) }
+    )
+    expect(mockActivityCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ type: 'STAGE_CHANGED', matchingId: 'm1' }),
+      })
+    )
+  })
+
+  it('status も memo も未指定の場合 422 を返す', async () => {
+    mockAuth.mockResolvedValueOnce(adminSession)
+    mockFindUnique.mockResolvedValueOnce({ id: 'm1', caseId: 'case-1', talentId: 'talent-1', case: { assignedUserId: 'admin-id' } })
+    const res = await PATCH(
+      new Request('http://localhost/api/matchings/m1', {
+        method: 'PATCH',
+        body: JSON.stringify({}),
+      }),
+      { params: Promise.resolve({ id: 'm1' }) }
+    )
+    expect(res.status).toBe(422)
   })
 })
