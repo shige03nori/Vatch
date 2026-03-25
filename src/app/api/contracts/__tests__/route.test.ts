@@ -76,7 +76,7 @@ describe('POST /api/contracts', () => {
       body: JSON.stringify({
         caseId: 'clh5u5vw00000356ng7nc4l12',
         talentId: 'clh5u5vw00000356ng7nc4l13',
-        assignedUserId: 'clh5u5vw00000356ng7nc4l14',
+        proposalId: 'clh5u5vw00000356ng7nc4l14',
         startDate: '2026-04-01',
         unitPrice: 800000,
         costPrice: 600000,
@@ -84,5 +84,28 @@ describe('POST /api/contracts', () => {
       }),
     })
     expect((await POST(req)).status).toBe(201)
+  })
+
+  it('assignedUserId はセッションユーザーIDで自動設定される', async () => {
+    mockAuth.mockResolvedValueOnce(adminSession)
+    mockCreate.mockResolvedValueOnce({ id: 'c1' })
+
+    const body = {
+      caseId: 'claaaaaaaaaaaaaaaaaaaaaa1',
+      talentId: 'claaaaaaaaaaaaaaaaaaaaaa2',
+      proposalId: 'claaaaaaaaaaaaaaaaaaaaaa3',
+      startDate: '2026-04-01',
+      unitPrice: 80,
+      costPrice: 65,
+      grossProfitRate: 18.75,
+    }
+    const res = await POST(new Request('http://localhost/api/contracts', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }))
+    expect(res.status).toBe(201)
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ assignedUserId: 'admin-id' }) })
+    )
   })
 })

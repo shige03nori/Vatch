@@ -34,13 +34,16 @@ export async function GET(request: Request): Promise<NextResponse> {
 export async function POST(request: Request): Promise<NextResponse> {
   const authResult = await requireAuth()
   if (authResult instanceof NextResponse) return authResult
+  const { session } = authResult
 
   const body = await request.json().catch(() => ({}))
   const parsed = CreateContractSchema.safeParse(body)
   if (!parsed.success) return unprocessable(parsed.error.issues)
 
   try {
-    const record = await prisma.contract.create({ data: parsed.data })
+    const record = await prisma.contract.create({
+      data: { ...parsed.data, assignedUserId: session.user.id },
+    })
     return created(record)
   } catch {
     return serverError()
