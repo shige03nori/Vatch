@@ -6,7 +6,7 @@ import type { PipelineMatching } from '@/types/pipeline'
 interface Props {
   matching: PipelineMatching
   onClose: () => void
-  onUpdated: () => void
+  onProposalUpdated: () => void
 }
 
 const PROPOSAL_STATUS_LABEL: Record<string, string> = {
@@ -17,7 +17,7 @@ const PROPOSAL_STATUS_LABEL: Record<string, string> = {
   REJECTED: '不採用',
 }
 
-export function ProposalModal({ matching, onClose, onUpdated }: Props) {
+export function ProposalModal({ matching, onClose, onProposalUpdated }: Props) {
   const [loading, setLoading] = useState(false)
   const proposal = matching.proposal
 
@@ -30,7 +30,7 @@ export function ProposalModal({ matching, onClose, onUpdated }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ proposalId: proposal.id }),
       })
-      onUpdated()
+      onProposalUpdated()
     } finally {
       setLoading(false)
     }
@@ -45,7 +45,7 @@ export function ProposalModal({ matching, onClose, onUpdated }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'DRAFT' }),
       })
-      onUpdated()
+      onProposalUpdated()
     } finally {
       setLoading(false)
     }
@@ -59,7 +59,7 @@ export function ProposalModal({ matching, onClose, onUpdated }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ matchingId: matching.id }),
       })
-      onUpdated()
+      onProposalUpdated()
     } finally {
       setLoading(false)
     }

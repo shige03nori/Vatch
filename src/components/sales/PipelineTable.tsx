@@ -19,17 +19,28 @@ type ModalState =
   | { type: 'contract'; matching: PipelineMatching }
   | null
 
-const kpiItems: { key: PipelineStage; label: string; color: string }[] = [
+// KPI バー用（REPLIED+INTERVIEWING を商談中として集計）
+const kpiItems: { key: string; label: string; color: string }[] = [
   { key: 'PENDING_AUTO', label: '提案準備中',   color: '#fbbf24' },
   { key: 'SENT',         label: '提案送信済み', color: '#60a5fa' },
-  { key: 'INTERVIEWING', label: '商談中',        color: '#c084fc' },
+  { key: 'SHODAN',       label: '商談中',        color: '#c084fc' },
   { key: 'CONTRACTED',   label: '成約',           color: '#4ade80' },
   { key: 'REJECTED',     label: '失注',            color: '#f87171' },
 ]
 
+// フィルタータブ用（商談中 = REPLIED OR INTERVIEWING）
+type TabKey = PipelineStage | 'ALL' | 'SHODAN'
+const tabItems: { key: TabKey; label: string }[] = [
+  { key: 'PENDING_AUTO', label: '提案準備中' },
+  { key: 'SENT',         label: '提案送信済み' },
+  { key: 'SHODAN',       label: '商談中' },
+  { key: 'CONTRACTED',   label: '成約' },
+  { key: 'REJECTED',     label: '失注' },
+]
+
 export function PipelineTable({ initialData }: Props) {
   const [data, setData] = useState<PipelineMatching[]>(initialData)
-  const [activeTab, setActiveTab] = useState<PipelineStage | 'ALL'>('ALL')
+  const [activeTab, setActiveTab] = useState<TabKey>('ALL')
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState<ModalState>(null)
 
@@ -40,12 +51,20 @@ export function PipelineTable({ initialData }: Props) {
       counts[m.status] = (counts[m.status] ?? 0) + 1
       if (m.status === 'CONTRACTED') contractedRevenue += m.sellPrice ?? 0
     }
+    // REPLIED と INTERVIEWING を商談中として合算
+    counts['SHODAN'] = (counts['REPLIED'] ?? 0) + (counts['INTERVIEWING'] ?? 0)
     return { counts, contractedRevenue }
   }, [data])
 
   const filtered = useMemo(() => {
     return data.filter(m => {
-      if (activeTab !== 'ALL' && m.status !== activeTab) return false
+      if (activeTab !== 'ALL') {
+        if (activeTab === 'SHODAN') {
+          if (m.status !== 'REPLIED' && m.status !== 'INTERVIEWING') return false
+        } else if (m.status !== activeTab) {
+          return false
+        }
+      }
       if (search) {
         const q = search.toLowerCase()
         if (!m.case.title.toLowerCase().includes(q) && !m.talent.name.toLowerCase().includes(q)) return false
@@ -114,13 +133,14 @@ export function PipelineTable({ initialData }: Props) {
           >
             全件 <span style={{ color: '#555' }}>({data.length})</span>
           </button>
-          {PIPELINE_STAGES.map(stage => {
-            const config = STAGE_CONFIG[stage]
-            const isActive = activeTab === stage
+          {tabItems.map(({ key, label }) => {
+            const isActive = activeTab === key
+            const stageKey = key === 'SHODAN' ? 'INTERVIEWING' : key as PipelineStage
+            const config = STAGE_CONFIG[stageKey]
             return (
               <button
-                key={stage}
-                onClick={() => setActiveTab(stage)}
+                key={key}
+                onClick={() => setActiveTab(key)}
                 className="px-3 py-1.5 rounded-md text-xs font-semibold transition-colors"
                 style={{
                   background: isActive ? config.bg : 'transparent',
@@ -128,7 +148,7 @@ export function PipelineTable({ initialData }: Props) {
                   border: isActive ? `1px solid ${config.border}` : '1px solid transparent',
                 }}
               >
-                {config.label} <span style={{ color: '#555' }}>({kpi.counts[stage] ?? 0})</span>
+                {label} <span style={{ color: '#555' }}>({kpi.counts[key] ?? 0})</span>
               </button>
             )
           })}
@@ -167,7 +187,7 @@ export function PipelineTable({ initialData }: Props) {
       <div className="flex-1 overflow-y-auto">
         {filtered.map(m => {
           const scoreColor = m.score >= 85 ? '#4ade80' : m.score >= 70 ? '#fbbf24' : '#888'
-          const gpr = m.grossProfitRate * 100
+          const gpr = m.grossProfitRate
           const gprColor = gpr >= 15 ? '#4ade80' : gpr >= 10 ? '#fbbf24' : '#888'
           const canContract = m.status === 'REPLIED' || m.status === 'INTERVIEWING'
           const stageConfig = STAGE_CONFIG[m.status as PipelineStage] ?? STAGE_CONFIG['PENDING_AUTO']
