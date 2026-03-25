@@ -17,6 +17,7 @@ const navSections = [
   {
     label: '営業',
     links: [
+      { href: '/sales',     label: '営業管理',    icon: '💼' },
       { href: '/matching',  label: 'マッチング',  icon: '⚡', badge: 5, badgeColor: 'blue' as const },
       { href: '/proposals', label: '提案メール',  icon: '📨' },
       { href: '/progress',  label: '営業進捗',    icon: '📊' },
