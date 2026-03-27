@@ -73,7 +73,7 @@ async function callClaude(bodyText: string): Promise<ParsedEmailResult> {
   const truncated = bodyText.slice(0, 3000)
   const content = `以下のSES営業メールを解析して案件または人材情報を抽出してください。\n\n注意: 単価・希望単価は必ず「万円単位の整数」で返してください（例: 70万円→70、800,000円→80）。\n\n${truncated}`
   const response = await getClient().messages.create({
-    model: 'claude-sonnet-4-6',
+    model: 'claude-haiku-4-5-20251001',
     max_tokens: 1024,
     tools: [TOOL_DEFINITION],
     tool_choice: { type: 'tool', name: 'extract_email_info' },
