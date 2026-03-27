@@ -17,6 +17,21 @@ jobs:
 
       - uses: superfly/flyctl-actions/setup-flyctl@v1
 
+      - name: Ensure staging DB is running
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          DB_APP="vatch-staging-db"
+          MACHINE_ID=$(flyctl machine list -a "$DB_APP" --json | jq -r '.[0].id')
+          STATE=$(flyctl machine list -a "$DB_APP" --json | jq -r '.[0].state')
+          echo "DB machine $MACHINE_ID: state=$STATE"
+          if [ "$STATE" = "stopped" ]; then
+            echo "DB stopped → starting..."
+            flyctl machine start "$MACHINE_ID" -a "$DB_APP"
+            flyctl machine wait "$MACHINE_ID" -a "$DB_APP" --state started --timeout 60
+            echo "DB is ready"
+          fi
+
       - run: flyctl deploy --remote-only --app vatch-staging
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
