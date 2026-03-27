@@ -57,4 +57,5 @@ jobs:
           flyctl machine run "$IMAGE" \
             --app vatch-staging \
             --rm \
+            --attach \
             -- node node_modules/prisma/build/index.js db seed
