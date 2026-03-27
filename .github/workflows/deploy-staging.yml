@@ -28,7 +28,7 @@ jobs:
           if [ "$STATE" = "stopped" ]; then
             echo "DB stopped → starting..."
             flyctl machine start "$MACHINE_ID" -a "$DB_APP"
-            flyctl machine wait "$MACHINE_ID" -a "$DB_APP" --state started --timeout 60
+            flyctl machine wait "$MACHINE_ID" -a "$DB_APP" --state started --wait-timeout 60s
             echo "DB is ready"
           fi
 
@@ -49,5 +49,5 @@ jobs:
             flyctl machine start "$MACHINE_ID" -a "$APP"
           fi
           echo "Waiting for machine to be started..."
-          flyctl machine wait "$MACHINE_ID" -a "$APP" --state started --timeout 120
+          flyctl machine wait "$MACHINE_ID" -a "$APP" --state started --wait-timeout 120s
           flyctl ssh console -a "$APP" -C "node node_modules/prisma/build/index.js db seed"
