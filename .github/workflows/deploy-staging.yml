@@ -44,6 +44,13 @@ jobs:
             sleep 5
           done
 
-      - run: flyctl deploy --remote-only --config fly.staging.toml
+      - name: Deploy to Fly.io Staging
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          for i in 1 2 3; do
+            flyctl deploy --remote-only --config fly.staging.toml && break
+            if [ "$i" = "3" ]; then echo "All 3 attempts failed"; exit 1; fi
+            echo "Attempt $i failed, retrying in 30s..."
+            sleep 30
+          done
