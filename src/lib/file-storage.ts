@@ -14,7 +14,10 @@ class LocalStorage implements StorageBackend {
   }
 
   async save(key: string, buffer: Buffer): Promise<void> {
-    const filePath = path.join(this.baseDir, key)
+    const filePath = path.resolve(path.join(this.baseDir, key))
+    if (!filePath.startsWith(path.resolve(this.baseDir))) {
+      throw new Error(`Invalid storage key: path traversal detected`)
+    }
     await fs.mkdir(path.dirname(filePath), { recursive: true })
     await fs.writeFile(filePath, buffer)
   }
