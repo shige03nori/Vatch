@@ -1,16 +1,49 @@
 // src/lib/email-ingestion.ts
+import * as path from 'path'
 import { prisma } from '@/lib/prisma'
 import { fetchUnreadEmails } from './email-fetcher'
 import { parseEmailBody } from './email-parser'
 import { decrypt } from './crypto'
+import { getFileStorage } from './file-storage'
+import type { FetchedEmail } from './email-fetcher'
 
 const ENCRYPTION_KEY = process.env.EMAIL_SOURCE_ENCRYPTION_KEY ?? ''
+const MAX_RESUME_SIZE = 10 * 1024 * 1024 // 10MB
 
 export type IngestionResult = {
   fetched: number
   parsed: number
   errors: number
   unknown: number
+}
+
+async function saveResume(
+  talentId: string,
+  attachment: FetchedEmail['attachments'][number],
+): Promise<{ key: string; filename: string } | null> {
+  if (attachment.content.length > MAX_RESUME_SIZE) {
+    console.warn(`[ingestion] Attachment too large (${attachment.content.length} bytes), skipping: ${attachment.filename}`)
+    return null
+  }
+
+  const ext = path.extname(attachment.filename).toLowerCase() || '.pdf'
+  const key = `resumes/${talentId}-${Date.now()}${ext}`
+
+  const storage = getFileStorage()
+  await storage.save(key, attachment.content)
+  return { key, filename: attachment.filename }
+}
+
+function findFirstResume(attachments: FetchedEmail['attachments']): FetchedEmail['attachments'][number] | null {
+  // email-fetcher 側でフィルタ済みだが、防御的に PDF/DOCX のみ採用する
+  return attachments.find((att) => {
+    const ct = att.contentType
+    const fn = att.filename.toLowerCase()
+    if (ct === 'application/pdf') return true
+    if (ct === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return true
+    if ((ct === 'application/octet-stream' || ct === 'application/zip') && fn.endsWith('.docx')) return true
+    return false
+  }) ?? null
 }
 
 export async function runIngestion(): Promise<IngestionResult> {
@@ -39,7 +72,6 @@ export async function runIngestion(): Promise<IngestionResult> {
         const existing = await prisma.email.findUnique({ where: { messageId: fetched.messageId } })
         if (existing) continue
       } else {
-        // messageId がない場合は件名+送信元+UTC受信日で重複チェック
         const dayStart = new Date(fetched.receivedAt)
         dayStart.setUTCHours(0, 0, 0, 0)
         const dayEnd = new Date(dayStart)
@@ -92,7 +124,6 @@ export async function runIngestion(): Promise<IngestionResult> {
           },
         })
 
-        // 解析完了ログ（種別問わず常に記録）
         await prisma.activityLog.create({
           data: { type: 'EMAIL_PARSED', description: `AI解析完了: ${parsed.type} (信頼度${parsed.confidence}%)`, emailId: emailRecord.id },
         })
@@ -119,6 +150,7 @@ export async function runIngestion(): Promise<IngestionResult> {
             data: { type: 'CASE_CREATED', description: `案件登録: ${parsed.case.title}`, emailId: emailRecord.id, caseId: createdCase.id },
           })
           result.parsed++
+
         } else if (parsed.type === 'TALENT' && parsed.talent) {
           const adminUser = await prisma.user.findFirst({ where: { role: 'ADMIN' }, orderBy: { createdAt: 'asc' } })
           if (!adminUser) throw new Error('No ADMIN user found')
@@ -137,18 +169,42 @@ export async function runIngestion(): Promise<IngestionResult> {
               agencyEmail:    fetched.fromEmail,
             },
           })
+
+          // 添付ファイル（経歴書）の保存
+          const resumeAttachment = findFirstResume(fetched.attachments)
+          if (resumeAttachment) {
+            try {
+              const saved = await saveResume(createdTalent.id, resumeAttachment)
+              if (saved) {
+                try {
+                  await prisma.talent.update({
+                    where: { id: createdTalent.id },
+                    data: { resumeKey: saved.key, resumeFilename: saved.filename },
+                  })
+                } catch (updateErr) {
+                  console.error(`[ingestion] Failed to update Talent resumeKey, cleaning up file:`, updateErr)
+                  const storage = getFileStorage()
+                  storage.delete(saved.key).catch((e) =>
+                    console.error(`[ingestion] Failed to delete orphan file ${saved.key}:`, e)
+                  )
+                }
+              }
+            } catch (saveErr) {
+              console.error(`[ingestion] Failed to save resume for talent ${createdTalent.id}:`, saveErr)
+            }
+          }
+
           await prisma.activityLog.create({
             data: { type: 'TALENT_CREATED', description: `人材登録: ${parsed.talent.name}`, emailId: emailRecord.id, talentId: createdTalent.id },
           })
           result.parsed++
+
         } else {
-          // UNKNOWN は EMAIL_PARSED のみ記録済み（CASE/TALENT作成なし）
           result.unknown++
         }
       } catch (err) {
         console.error(`[ingestion] Parse/create failed for email ${emailRecord.id}:`, err)
         await prisma.email.update({ where: { id: emailRecord.id }, data: { status: 'ERROR' } })
-        // EMAIL_PARSED タイプを使用（専用エラータイプは enum に存在しないため）
         await prisma.activityLog.create({
           data: { type: 'EMAIL_PARSED', description: `解析エラー: ${fetched.subject}`, emailId: emailRecord.id },
         })
