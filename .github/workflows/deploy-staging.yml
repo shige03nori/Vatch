@@ -44,9 +44,10 @@ jobs:
           MACHINE_ID=$(flyctl machine list -a "$APP" --json | jq -r '.[0].id')
           STATE=$(flyctl machine list -a "$APP" --json | jq -r '.[0].state')
           echo "App machine $MACHINE_ID: state=$STATE"
-          if [ "$STATE" != "started" ]; then
-            echo "App machine not started → starting..."
+          if [ "$STATE" = "stopped" ] || [ "$STATE" = "created" ]; then
+            echo "App machine stopped → starting..."
             flyctl machine start "$MACHINE_ID" -a "$APP"
-            flyctl machine wait "$MACHINE_ID" -a "$APP" --state started --timeout 60
           fi
+          echo "Waiting for machine to be started..."
+          flyctl machine wait "$MACHINE_ID" -a "$APP" --state started --timeout 120
           flyctl ssh console -a "$APP" -C "node node_modules/prisma/build/index.js db seed"
