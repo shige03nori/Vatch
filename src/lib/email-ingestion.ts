@@ -26,7 +26,9 @@ async function saveResume(
     return null
   }
 
-  const ext = path.extname(attachment.filename).toLowerCase() || '.pdf'
+  const extFromName = path.extname(attachment.filename).toLowerCase()
+  const extFromType = attachment.contentType.includes('wordprocessingml') ? '.docx' : '.pdf'
+  const ext = extFromName || extFromType
   const key = `resumes/${talentId}-${Date.now()}${ext}`
 
   const storage = getFileStorage()
