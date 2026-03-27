@@ -29,8 +29,20 @@ jobs:
             echo "DB stopped → starting..."
             flyctl machine start "$MACHINE_ID" -a "$DB_APP"
             flyctl machine wait "$MACHINE_ID" -a "$DB_APP" --state started --wait-timeout 60s
-            echo "DB is ready"
           fi
+          echo "Waiting for PostgreSQL to accept connections..."
+          for i in $(seq 1 24); do
+            if flyctl ssh console -a "$DB_APP" -C "pg_isready -h localhost -U postgres" 2>/dev/null; then
+              echo "PostgreSQL is ready"
+              break
+            fi
+            if [ "$i" = "24" ]; then
+              echo "PostgreSQL did not become ready in time"
+              exit 1
+            fi
+            echo "  attempt $i/24, retrying in 5s..."
+            sleep 5
+          done
 
       - run: flyctl deploy --remote-only --app vatch-staging
         env:
