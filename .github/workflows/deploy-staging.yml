@@ -35,3 +35,8 @@ jobs:
       - run: flyctl deploy --remote-only --app vatch-staging
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Seed staging database
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl ssh console -a vatch-staging -C "node node_modules/prisma/build/index.js db seed"
