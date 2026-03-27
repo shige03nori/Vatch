@@ -52,6 +52,7 @@ const mockFetchedEmail = {
   subject: 'Java案件のご紹介',
   bodyText: 'Java Springの案件です',
   receivedAt: new Date('2026-03-20T10:00:00Z'),
+  attachments: [],  // ← 追加
 }
 
 const mockAdminUser = { id: 'admin1', role: 'ADMIN' }
