@@ -39,4 +39,14 @@ jobs:
       - name: Seed staging database
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: flyctl ssh console -a vatch-staging -C "node node_modules/prisma/build/index.js db seed"
+        run: |
+          APP="vatch-staging"
+          MACHINE_ID=$(flyctl machine list -a "$APP" --json | jq -r '.[0].id')
+          STATE=$(flyctl machine list -a "$APP" --json | jq -r '.[0].state')
+          echo "App machine $MACHINE_ID: state=$STATE"
+          if [ "$STATE" != "started" ]; then
+            echo "App machine not started → starting..."
+            flyctl machine start "$MACHINE_ID" -a "$APP"
+            flyctl machine wait "$MACHINE_ID" -a "$APP" --state started --timeout 60
+          fi
+          flyctl ssh console -a "$APP" -C "node node_modules/prisma/build/index.js db seed"
