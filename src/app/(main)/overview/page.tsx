@@ -7,8 +7,8 @@ const flowSteps = [
     subtitle: '案件・人材情報を自動抽出',
     features: [
       { label: 'メール一覧管理',       status: 'done'   },
-      { label: 'AI自動テキスト解析',   status: 'soon'   },
-      { label: '案件/人材 自動分類',   status: 'soon'   },
+      { label: 'AI自動テキスト解析',   status: 'done'   },
+      { label: '案件/人材 自動分類',   status: 'done'   },
       { label: '添付ファイル解析',     status: 'future' },
     ],
   },
@@ -20,7 +20,7 @@ const flowSteps = [
       { label: '案件CRUD・ステータス管理', status: 'done' },
       { label: '人材CRUD・スキル管理',    status: 'done' },
       { label: '担当者RBAC制御',          status: 'done' },
-      { label: 'スキルオートタグ',        status: 'soon' },
+      { label: 'スキルオートタグ',        status: 'done' },
     ],
   },
   {
@@ -29,8 +29,8 @@ const flowSteps = [
     subtitle: '最適な案件×人材を提案',
     features: [
       { label: 'マッチングレコード管理',   status: 'done'   },
-      { label: 'スキル類似度スコアリング', status: 'soon'   },
-      { label: 'マッチング候補自動生成',   status: 'soon'   },
+      { label: 'スキル類似度スコアリング', status: 'done'   },
+      { label: 'マッチング候補自動生成',   status: 'done'   },
       { label: '精度フィードバック学習',   status: 'future' },
     ],
   },
