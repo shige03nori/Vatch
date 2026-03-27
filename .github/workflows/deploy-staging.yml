@@ -54,8 +54,12 @@ jobs:
         run: |
           IMAGE=$(flyctl releases -a vatch-staging --json | jq -r '.[0].ImageRef')
           echo "Running seed with image: $IMAGE"
-          flyctl machine run "$IMAGE" \
+          MACHINE_ID=$(flyctl machine run "$IMAGE" \
             --app vatch-staging \
-            --rm \
-            --attach \
-            -- node node_modules/prisma/build/index.js db seed
+            --restart no \
+            -- node node_modules/prisma/build/index.js db seed 2>&1 \
+            | grep "Machine ID:" | awk '{print $3}')
+          echo "Seed machine: $MACHINE_ID, waiting for completion..."
+          flyctl machine wait "$MACHINE_ID" -a vatch-staging --state stopped --wait-timeout 120s
+          echo "Seed completed"
+          flyctl machine destroy "$MACHINE_ID" -a vatch-staging --force
