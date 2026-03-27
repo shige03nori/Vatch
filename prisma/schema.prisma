@@ -164,6 +164,8 @@ model Talent {
   agencyEmail    String?
   assignedUserId String
   sourceEmailId  String?      @unique
+  resumeKey      String?
+  resumeFilename String?
 
   assignedUser User        @relation(fields: [assignedUserId], references: [id])
   sourceEmail  Email?      @relation("EmailToTalent", fields: [sourceEmailId], references: [id])
