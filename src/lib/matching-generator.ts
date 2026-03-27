@@ -54,7 +54,7 @@ async function callClaude(caseRecord: Case, talent: Talent): Promise<MatchingEva
 人材: スキル: ${talent.skills.join(',')} / 経験: ${talent.experience}年 / 希望単価: ${talent.desiredRate}万円 / 勤務: ${talent.workStyle} / 稼働: ${availableFrom}`
 
   const response = await getClient().messages.create({
-    model: 'claude-sonnet-4-6',
+    model: 'claude-haiku-4-5-20251001',
     max_tokens: 512,
     tools: [TOOL_DEFINITION],
     tool_choice: { type: 'tool', name: 'evaluate_matching' },
