@@ -1,0 +1,20 @@
+app = 'vatch-staging'
+primary_region = 'nrt'
+
+[build]
+
+[deploy]
+  release_command = "node node_modules/prisma/build/index.js migrate deploy && node node_modules/prisma/build/index.js db seed"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+[[vm]]
+  memory = '512mb'
+  cpu_kind = 'shared'
+  cpus = 1
