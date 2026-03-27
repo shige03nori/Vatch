@@ -18,7 +18,10 @@ export const CreateMatchingSchema = z.object({
 })
 
 export const UpdateMatchingSchema = z.object({
-  status: z.enum(['UNPROPOSED','PENDING_AUTO','SENT','REPLIED','INTERVIEWING','CONTRACTED','REJECTED']),
+  status: z.enum(['UNPROPOSED','PENDING_AUTO','SENT','REPLIED','INTERVIEWING','CONTRACTED','REJECTED']).optional(),
+  memo:   z.string().nullable().optional(),
+}).refine(data => data.status !== undefined || data.memo !== undefined, {
+  message: 'status または memo のいずれかが必要です',
 })
 
 export const MatchingQuerySchema = z.object({

@@ -1,3 +1,108 @@
+# 営業進捗画面 テストデータ整備 Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** `src/data/progress.ts` を削除し、`prisma/seed.ts` を過去6ヶ月分のリッチなテストデータで書き換え、`/progress` ページでKPI・パイプライン・月別推移・担当者別実績が適切に表示されることを確認する。
+
+**Architecture:** seed スクリプトは全テーブルをクリア後に再投入する。User×3・Case×12・Talent×12・Matching×20・Proposal×15（sentAt必須）・Contract×8（createdAt明示）を過去6ヶ月に分散させる。`src/data/progress.ts` はどこからも参照されていないため単純に削除する。
+
+**Tech Stack:** Prisma ORM, PostgreSQL, Next.js 14, Playwright（スクリーンショット確認）
+
+---
+
+## ファイル構成
+
+| ファイル | 変更種別 |
+|---|---|
+| `src/data/progress.ts` | 削除 |
+| `prisma/seed.ts` | 完全書き換え |
+
+---
+
+### Task 1: `src/data/progress.ts` を削除
+
+**Files:**
+- Delete: `src/data/progress.ts`
+
+- [ ] **Step 1: 参照がないことを確認**
+
+```bash
+grep -r "data/progress" src/ --include="*.ts" --include="*.tsx"
+```
+
+Expected: 出力なし（参照なし）
+
+- [ ] **Step 2: ファイルを削除**
+
+```bash
+rm src/data/progress.ts
+```
+
+- [ ] **Step 3: TypeScript エラーがないことを確認**
+
+```bash
+npx tsc --noEmit 2>&1 | head -20
+```
+
+Expected: エラーなし
+
+- [ ] **Step 4: コミット**
+
+```bash
+git add -A
+git commit -m "chore: remove unused mock data file src/data/progress.ts"
+```
+
+---
+
+### Task 2: `prisma/seed.ts` を過去6ヶ月分のリッチなテストデータで書き換える
+
+**Files:**
+- Modify: `prisma/seed.ts`
+
+**背景知識:**
+- `prisma/seed.ts` は `npx prisma db seed` で実行される（`package.json` の `prisma.seed` 設定）
+- 冒頭で全テーブルをクリアするので既存データは上書きされる
+- `Matching.@@unique([caseId, talentId])` のため同じ case-talent ペアは1件のみ作成可能
+- `Proposal.matchingId @unique` のため Matching に紐づく Proposal は最大1件
+- `Contract.proposalId String? @unique` のため proposalId は任意（今回は設定しない）
+- `Proposal.sentAt` が null だと KPI 集計に反映されない（必ず設定すること）
+- `Contract.createdAt` は `@default(now())` のため、過去日付にするには明示的に渡す必要がある
+- `Proposal.status` が `DRAFT` の場合のみ KPI 集計から除外される（`PENDING_AUTO`・`SENT`・`REPLIED` は含まれる）
+
+**データ設計:**
+
+| モデル | 件数 | 内訳 |
+|---|---|---|
+| User | 3 | ADMIN×1（山田太郎）, STAFF×2（田中花子・鈴木一郎） |
+| Case | 12 | adminUser×4, staffUser1×4, staffUser2×4 |
+| Talent | 12 | adminUser×4, staffUser1×4, staffUser2×4 |
+| Matching | 20 | SENT×5, REPLIED×5, INTERVIEWING×5, CONTRACTED×5 |
+| Proposal | 15 | REPLIEDマッチング×5, INTERVIEWINGマッチング×5, CONTRACTEDマッチング×5 |
+| Contract | 8 | ACTIVE×5（CONTRACTEDマッチングに対応）, ENDED×2, ACTIVE×1（過去分） |
+
+**ユニーク制約に注意した matching ペア設計:**
+```
+SENT:         cases[0-4]  × talents[0-4]  （5ペア）
+REPLIED:      cases[5-9]  × talents[5-9]  （5ペア）
+INTERVIEWING: cases[0-4]  × talents[5-9]  （5ペア）
+CONTRACTED:   cases[5-9]  × talents[0-4]  （5ペア）
+```
+
+**期待される月別データ（今日 = 2026-03-27 基準）:**
+
+| 月 | 提案数 | 成約数 | 粗利 |
+|---|---|---|---|
+| 10月 | 3 | 1 | 15万 |
+| 11月 | 3 | 2 | 28万 |
+| 12月 | 3 | 2 | 31万 |
+| 1月 | 2 | 1 | 20万 |
+| 2月 | 2 | 1 | 17万 |
+| 3月（今月） | 2 | 1 | 15万 |
+
+- [ ] **Step 1: `prisma/seed.ts` を以下のコードで完全書き換える**
+
+```typescript
 // prisma/seed.ts
 import {
   PrismaClient,
@@ -122,9 +227,25 @@ async function main() {
     prisma.matching.create({ data: { caseId: cases[8].id, talentId: talents[3].id, score: 90, skillMatchRate: 92, unitPriceOk: true, timingOk: true, locationOk: true,  costPrice: 90, sellPrice: 110, grossProfitRate: 18.2,  grossProfitOk: true, status: MatchingStatus.CONTRACTED, reason: 'PythonエンジニアがMLプラットフォーム担当で稼働中' } }),
     prisma.matching.create({ data: { caseId: cases[9].id, talentId: talents[4].id, score: 85, skillMatchRate: 87, unitPriceOk: true, timingOk: true, locationOk: false, costPrice: 78, sellPrice: 95,  grossProfitRate: 17.9,  grossProfitOk: true, status: MatchingStatus.CONTRACTED, reason: 'iOSエンジニアがIoTアプリUI担当で稼働中' } }),
   ])
+  // matchings インデックス対応:
+  //   m[0-4]:   SENT (cases[0-4] × talents[0-4])
+  //   m[5-9]:   REPLIED (cases[5-9] × talents[5-9])
+  //   m[10-14]: INTERVIEWING (cases[0-4] × talents[5-9])
+  //   m[15-19]: CONTRACTED (cases[5-9] × talents[0-4])
   console.log('✅ マッチング作成: 20件')
 
   // ── 提案（15件）── sentAt を必ず設定する
+  // REPLIED matchings (m[5-9]):  案件 cases[5-9] → staff1/staff2 の案件
+  // INTERVIEWING matchings (m[10-14]): 案件 cases[0-4] → admin/staff1 の案件
+  // CONTRACTED matchings (m[15-19]): 案件 cases[5-9] → staff1/staff2 の案件
+  //
+  // sentAt 分布（月別提案数）:
+  //   Oct: m[5]=p[0], m[9]=p[4], m[15]=p[10]     → 3件
+  //   Nov: m[6]=p[1], m[8]=p[3], m[16]=p[11]      → 3件
+  //   Dec: m[7]=p[2], m[10]=p[5], m[17]=p[12]     → 3件
+  //   Jan: m[11]=p[6], m[12]=p[7]                  → 2件
+  //   Feb: m[14]=p[9], m[19]=p[14]                → 2件
+  //   Mar: m[13]=p[8], m[18]=p[13]                → 2件
   await Promise.all([
     // REPLIED matchings用 (m[5-9])
     prisma.proposal.create({ data: { matchingId: matchings[5].id,  to: cases[5].clientEmail!, subject: '【ご提案】SAP ABAPエンジニア ご紹介の件',    bodyText: 'ERP導入支援にSAP専門エンジニアをご提案します。',               status: ProposalStatus.REPLIED, sentAt: mAgo(5, 10), costPrice: 72, sellPrice: 85,  grossProfitRate: 15.3 } }),
@@ -148,6 +269,17 @@ async function main() {
   console.log('✅ 提案作成: 15件（sentAt 設定済み）')
 
   // ── 契約（8件）── createdAt を明示的に過去日付で設定
+  // ACTIVE (5件): cases[5-9] × talents[0-4]（CONTRACTED マッチングに対応）
+  //   assignedUserId: staff1（cases[5-7]）, staff2（cases[8-9]）
+  // ENDED/ACTIVE (3件): cases[10-11] × talents[10-11] の組合せ
+  //
+  // createdAt 分布（月別成約数）:
+  //   Oct: c[5]=mAgo(5)                    → 1件
+  //   Nov: c[0]=mAgo(4), c[6]=mAgo(4,15)  → 2件
+  //   Dec: c[1]=mAgo(3), c[2]=mAgo(3,15)  → 2件
+  //   Jan: c[3]=mAgo(2)                    → 1件
+  //   Feb: c[4]=mAgo(1)                    → 1件
+  //   Mar: c[7]=mAgo(0,10)                 → 1件
   await Promise.all([
     // ACTIVE (staff1 が担当)
     prisma.contract.create({ data: { caseId: cases[5].id, talentId: talents[0].id, assignedUserId: staffUser1.id, startDate: mAgo(4, 1), unitPrice: 85,  costPrice: 70, grossProfitRate: 17.6,  status: ContractStatus.ACTIVE, createdAt: mAgo(4) } }),
@@ -193,3 +325,78 @@ main()
   .finally(async () => {
     await prisma.$disconnect()
   })
+```
+
+- [ ] **Step 2: TypeScript コンパイルチェック**
+
+```bash
+npx tsc --noEmit 2>&1 | head -30
+```
+
+Expected: エラーなし
+
+- [ ] **Step 3: seed を実行**
+
+```bash
+npx prisma db seed
+```
+
+Expected output（抜粋）:
+```
+🌱 シード開始...
+✅ ユーザー作成: 3名
+✅ 案件作成: 12件
+✅ 人材作成: 12名
+✅ マッチング作成: 20件
+✅ 提案作成: 15件（sentAt 設定済み）
+✅ 契約作成: 8件（createdAt 明示設定済み）
+✅ 活動ログ作成
+🎉 シード完了!
+```
+
+もしエラーが発生した場合の対処法:
+- `Unique constraint failed on the fields: (caseId, talentId)` → matching のペア設計を確認
+- `Foreign key constraint failed` → データ投入順序を確認（user → case → talent → matching → proposal → contract）
+
+- [ ] **Step 4: コミット**
+
+```bash
+git add prisma/seed.ts
+git commit -m "feat: seed を過去6ヶ月分のリッチなテストデータで拡充"
+```
+
+---
+
+### Task 3: `/progress` ページをスクリーンショットで確認
+
+**Files:** なし（確認のみ）
+
+- [ ] **Step 1: 開発サーバーが起動していることを確認**
+
+```bash
+# ポート3000が使用中であれば起動中
+netstat -an | grep 3000
+# または
+curl -s -o /dev/null -w "%{http_code}" http://localhost:3000
+```
+
+Expected: `200` または接続確認
+
+未起動の場合は別ターミナルで `npm run dev` を実行してから継続する。
+
+- [ ] **Step 2: Playwright で `/progress` ページを確認**
+
+Playwright MCP ツールを使用:
+1. `browser_navigate` → `http://localhost:3000/progress`
+2. `browser_take_screenshot`
+
+Expected（画面で確認すること）:
+- **KPI サマリー 4枚**: 今月提案数・今月成約数・成約率・今月粗利に数値が表示される
+- **営業パイプライン**: 面談調整中(5)・提案中(5)・返答待ち(5)・稼働中(5)のバーが表示される
+- **月別推移テーブル**: 10月〜3月の6ヶ月分のデータが表示される（今月行がハイライト）
+- **担当者別実績テーブル**: 山田太郎・田中花子・鈴木一郎の3名が表示される
+- 「直近6ヶ月のデータがありません」は表示されない
+
+データが表示されない場合:
+- KPI が全て0 → Proposal の `sentAt` が null になっていないか確認（`npx prisma studio` で確認可能）
+- 担当者別実績が空 → Contract の `createdAt` が6ヶ月以上前になっていないか確認

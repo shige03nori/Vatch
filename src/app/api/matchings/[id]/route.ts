@@ -41,6 +41,32 @@ export async function PATCH(request: Request, { params }: Params): Promise<NextR
     if (!parsed.success) return unprocessable(parsed.error.issues)
 
     const record = await prisma.matching.update({ where: { id }, data: parsed.data })
+
+    if (parsed.data.status !== undefined) {
+      await prisma.activityLog.create({
+        data: {
+          type: 'STAGE_CHANGED',
+          description: `ステージ変更: ${existing.status} → ${parsed.data.status}`,
+          userId: session.user.id,
+          matchingId: id,
+          caseId: existing.caseId,
+          talentId: existing.talentId,
+        },
+      })
+    }
+    if (parsed.data.memo !== undefined) {
+      await prisma.activityLog.create({
+        data: {
+          type: 'MEMO_UPDATED',
+          description: 'メモを更新しました',
+          userId: session.user.id,
+          matchingId: id,
+          caseId: existing.caseId,
+          talentId: existing.talentId,
+        },
+      })
+    }
+
     return ok(record)
   } catch {
     return serverError()
