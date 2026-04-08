@@ -49,3 +49,4 @@ next-env.d.ts
 /uploads/
 
 /src/generated/prisma
+presentation/screenshots/*.png
