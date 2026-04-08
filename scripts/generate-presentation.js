@@ -316,7 +316,7 @@ function main() {
     #nav-hint {
       position: fixed; bottom: 1.5rem; left: 50%;
       transform: translateX(-50%);
-      font-size: 0.75rem; color: #6b7280;
+      font-size: 0.8rem; color: #d1d5db;
       z-index: 100;
     }
 
