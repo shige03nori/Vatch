@@ -19,15 +19,18 @@ model User {
   emailVerified DateTime?
   image         String?
   role          Role      @default(STAFF)
+  password      String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts   Account[]
-  sessions   Session[]
-  cases      Case[]
-  talents    Talent[]
-  contracts  Contract[]
-  activities ActivityLog[]
+  accounts     Account[]
+  sessions     Session[]
+  cases        Case[]
+  talents      Talent[]
+  contracts    Contract[]
+  activities   ActivityLog[]
+  properTalent Talent?    @relation("ProperUser")
+  favorites    Favorite[]
 }
 
 model Account {
@@ -69,6 +72,7 @@ model VerificationToken {
 enum Role {
   ADMIN
   STAFF
+  PROPER
 }
 
 // ─────────────────────────────────────────
@@ -129,6 +133,7 @@ model Case {
   matchings    Matching[]
   contracts    Contract[]
   activities   ActivityLog[]
+  favorites    Favorite[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -166,9 +171,13 @@ model Talent {
   sourceEmailId  String?      @unique
   resumeKey      String?
   resumeFilename String?
+  talentType     TalentType   @default(EXTERNAL)
+  office         Office?
+  userId         String?      @unique
 
   assignedUser User        @relation(fields: [assignedUserId], references: [id])
   sourceEmail  Email?      @relation("EmailToTalent", fields: [sourceEmailId], references: [id])
+  properUser   User?       @relation("ProperUser", fields: [userId], references: [id])
   matchings    Matching[]
   contracts    Contract[]
   activities   ActivityLog[]
@@ -185,6 +194,16 @@ enum TalentStatus {
   NEGOTIATING
   ENDING_SOON
   INACTIVE
+}
+
+enum TalentType {
+  PROPER
+  EXTERNAL
+}
+
+enum Office {
+  TOKYO
+  NAGOYA
 }
 
 model Matching {
@@ -334,4 +353,15 @@ model EmailSource {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  caseId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, caseId])
 }
