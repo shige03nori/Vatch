@@ -26,6 +26,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         });
         if (!user) return null;
 
+        // password が未設定（null）のユーザーはCredentials認証をスキップ。
+        // 現在はシードユーザー（ADMIN/STAFF）がこれに該当し、auto-loginページ経由で使用される。
+        // PROPER ユーザーは必ずパスワードが設定されるため、このパスを通らない。
         if (user.password) {
           const isValid = await bcrypt.compare(credentials.password, user.password);
           if (!isValid) return null;
