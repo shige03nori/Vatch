@@ -23,6 +23,12 @@ const properSession = { user: { id: 'u1', role: 'PROPER' } }
 beforeEach(() => jest.clearAllMocks())
 
 describe('GET /api/favorites', () => {
+  it('returns 401 when not authenticated', async () => {
+    mockAuth.mockResolvedValueOnce(null)
+    const res = await GET(new Request('http://localhost/api/favorites'))
+    expect(res.status).toBe(401)
+  })
+
   it('returns 403 for non-PROPER user', async () => {
     mockAuth.mockResolvedValueOnce({ user: { id: 'u1', role: 'ADMIN' } })
     expect((await GET(new Request('http://localhost/api/favorites'))).status).toBe(403)
@@ -37,9 +43,21 @@ describe('GET /api/favorites', () => {
 })
 
 describe('POST /api/favorites', () => {
+  it('returns 401 when not authenticated', async () => {
+    mockAuth.mockResolvedValueOnce(null)
+    const res = await POST(new Request('http://localhost/api/favorites', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caseId: 'clxxxxxx0000000000000000000' }) }))
+    expect(res.status).toBe(401)
+  })
+
   it('returns 403 for non-PROPER user', async () => {
     mockAuth.mockResolvedValueOnce({ user: { id: 'u1', role: 'ADMIN' } })
     expect((await POST(new Request('http://localhost/api/favorites', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caseId: 'clxxxxxx0000000000000000000' }) }))).status).toBe(403)
+  })
+
+  it('returns 422 on invalid caseId', async () => {
+    mockAuth.mockResolvedValueOnce(properSession)
+    const res = await POST(new Request('http://localhost/api/favorites', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caseId: 'not-a-cuid' }) }))
+    expect(res.status).toBe(422)
   })
 
   it('creates favorite', async () => {
@@ -51,6 +69,12 @@ describe('POST /api/favorites', () => {
 })
 
 describe('DELETE /api/favorites/[caseId]', () => {
+  it('returns 401 when not authenticated', async () => {
+    mockAuth.mockResolvedValueOnce(null)
+    const res = await DELETE(new Request('http://localhost/api/favorites/c1'), { params: Promise.resolve({ caseId: 'c1' }) })
+    expect(res.status).toBe(401)
+  })
+
   it('returns 403 for non-PROPER user', async () => {
     mockAuth.mockResolvedValueOnce({ user: { id: 'u1', role: 'ADMIN' } })
     expect((await DELETE(new Request('http://localhost/api/favorites/c1'), { params: Promise.resolve({ caseId: 'c1' }) })).status).toBe(403)
