@@ -29,7 +29,7 @@ model User {
   talents      Talent[]
   contracts    Contract[]
   activities   ActivityLog[]
-  properTalent Talent?    @relation("ProperUser")
+  properTalent Talent?       @relation("ProperUser")
   favorites    Favorite[]
 }
 
@@ -128,8 +128,8 @@ model Case {
   assignedUserId String
   sourceEmailId  String?    @unique
 
-  assignedUser User        @relation(fields: [assignedUserId], references: [id])
-  sourceEmail  Email?      @relation("EmailToCase", fields: [sourceEmailId], references: [id])
+  assignedUser User          @relation(fields: [assignedUserId], references: [id])
+  sourceEmail  Email?        @relation("EmailToCase", fields: [sourceEmailId], references: [id])
   matchings    Matching[]
   contracts    Contract[]
   activities   ActivityLog[]
@@ -175,9 +175,9 @@ model Talent {
   office         Office?
   userId         String?      @unique
 
-  assignedUser User        @relation(fields: [assignedUserId], references: [id])
-  sourceEmail  Email?      @relation("EmailToTalent", fields: [sourceEmailId], references: [id])
-  properUser   User?       @relation("ProperUser", fields: [userId], references: [id])
+  assignedUser User          @relation(fields: [assignedUserId], references: [id])
+  sourceEmail  Email?        @relation("EmailToTalent", fields: [sourceEmailId], references: [id])
+  properUser   User?         @relation("ProperUser", fields: [userId], references: [id])
   matchings    Matching[]
   contracts    Contract[]
   activities   ActivityLog[]
@@ -224,8 +224,8 @@ model Matching {
   isAutoSend      Boolean        @default(false)
   status          MatchingStatus @default(UNPROPOSED)
 
-  case       Case      @relation(fields: [caseId], references: [id])
-  talent     Talent    @relation(fields: [talentId], references: [id])
+  case       Case          @relation(fields: [caseId], references: [id])
+  talent     Talent        @relation(fields: [talentId], references: [id])
   proposal   Proposal?
   activities ActivityLog[]
 
@@ -260,7 +260,7 @@ model Proposal {
   grossProfitRate Float
   sentAt          DateTime?
 
-  matching   Matching    @relation(fields: [matchingId], references: [id])
+  matching   Matching      @relation(fields: [matchingId], references: [id])
   contract   Contract?
   activities ActivityLog[]
 
@@ -343,13 +343,13 @@ enum ActivityLogType {
 }
 
 model EmailSource {
-  id        String   @id @default(cuid())
-  label     String
-  imapHost  String
-  imapPort  Int      @default(993)
-  imapUser  String
-  imapPass  String
-  isActive  Boolean  @default(true)
+  id       String  @id @default(cuid())
+  label    String
+  imapHost String
+  imapPort Int     @default(993)
+  imapUser String
+  imapPass String
+  isActive Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
