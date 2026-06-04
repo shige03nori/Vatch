@@ -12,6 +12,7 @@ const navSections = [
       { href: '/emails',    label: 'メール取込',     icon: '✉',  badge: 8,  badgeColor: 'amber' as const },
       { href: '/cases',     label: '案件管理',        icon: '📋' },
       { href: '/talents',   label: '人材管理',        icon: '👤' },
+      { href: '/proper',    label: 'プロパ管理',      icon: '🏢' },
     ],
   },
   {

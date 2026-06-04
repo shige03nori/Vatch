@@ -55,3 +55,17 @@ export async function requireAuth(): Promise<{ session: Session; isAdmin: boolea
   const isAdmin = session.user.role === 'ADMIN'
   return { session, isAdmin }
 }
+
+export async function requireStaff(): Promise<{ session: Session; isAdmin: boolean } | NextResponse> {
+  const result = await requireAuth()
+  if (result instanceof NextResponse) return result
+  if (result.session.user.role === 'PROPER') return forbidden()
+  return result
+}
+
+export async function requireProper(): Promise<{ session: Session } | NextResponse> {
+  const result = await requireAuth()
+  if (result instanceof NextResponse) return result
+  if (result.session.user.role !== 'PROPER') return forbidden()
+  return { session: result.session }
+}

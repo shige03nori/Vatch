@@ -1,6 +1,11 @@
 // src/lib/crypto.ts
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto'
 
+export function generateTempPassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
+  return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+}
+
 const ALGORITHM = 'aes-256-gcm'
 const IV_LENGTH = 12   // GCMの推奨IVサイズ
 const TAG_LENGTH = 16

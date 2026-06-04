@@ -17,6 +17,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   const skillsArr = skills ? skills.split(',').map(s => s.trim()) : undefined
 
   const where = {
+    talentType: 'EXTERNAL' as const,
     ...(isAdmin ? {} : { assignedUserId: session.user.id }),
     ...(status ? { status } : {}),
     ...(workStyle ? { workStyle } : {}),
