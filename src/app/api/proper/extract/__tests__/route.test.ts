@@ -4,6 +4,9 @@ import { POST } from '../route'
 const mockExtract = jest.fn()
 jest.mock('@/lib/resume-extractor', () => ({ extractTalentInfo: (...a: unknown[]) => mockExtract(...a) }))
 jest.mock('@/lib/auth', () => ({ auth: jest.fn() }))
+jest.mock('mammoth', () => ({
+  extractRawText: jest.fn().mockResolvedValue({ value: 'テスト経歴書の内容です' })
+}))
 import { auth } from '@/lib/auth'
 const mockAuth = auth as jest.Mock
 beforeEach(() => jest.clearAllMocks())

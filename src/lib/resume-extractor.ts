@@ -1,5 +1,4 @@
 import Anthropic from '@anthropic-ai/sdk'
-import mammoth from 'mammoth'
 
 let _client: Anthropic | null = null
 function getClient(): Anthropic {
@@ -35,15 +34,7 @@ export type ExtractedTalent = {
   email: string
 }
 
-export async function extractTalentInfo(input: string | Buffer): Promise<ExtractedTalent> {
-  let resumeText: string
-  if (Buffer.isBuffer(input)) {
-    const { value } = await mammoth.extractRawText({ buffer: input })
-    resumeText = value
-  } else {
-    resumeText = input
-  }
-
+export async function extractTalentInfo(resumeText: string): Promise<ExtractedTalent> {
   const response = await getClient().messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 1024,

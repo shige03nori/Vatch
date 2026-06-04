@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import mammoth from 'mammoth'
 import { ok, unprocessable, serverError, requireStaff } from '@/lib/api'
 import { extractTalentInfo } from '@/lib/resume-extractor'
 
@@ -14,7 +15,10 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   try {
     const buffer = Buffer.from(await file.arrayBuffer())
-    const extracted = await extractTalentInfo(buffer)
+    const { value: text } = await mammoth.extractRawText({ buffer })
+    if (!text.trim()) return unprocessable([{ path: ['file'], message: 'ファイルからテキストを抽出できませんでした' }])
+
+    const extracted = await extractTalentInfo(text)
     return ok(extracted)
   } catch {
     return serverError()
