@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { Providers } from '@/components/Providers'
 
 export const metadata: Metadata = {
   title: 'Vatch — VICENT SES管理プラットフォーム',
@@ -10,7 +11,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ja">
       <body className="bg-vatch-bg text-vatch-text">
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   )
