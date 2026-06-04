@@ -100,5 +100,6 @@ export async function fetchUnreadEmails(config: ImapConfig): Promise<FetchedEmai
     })
   }
 
-  return results
+  // Re: / RE: で始まる返信メールを除外
+  return results.filter((m) => !/^Re:/i.test(m.subject))
 }
