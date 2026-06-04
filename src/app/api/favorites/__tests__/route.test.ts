@@ -66,6 +66,17 @@ describe('POST /api/favorites', () => {
     const res = await POST(new Request('http://localhost/api/favorites', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caseId: 'clxxxxxx0000000000000000000' }) }))
     expect(res.status).toBe(201)
   })
+
+  it('returns 409 on duplicate favorite', async () => {
+    mockAuth.mockResolvedValueOnce(properSession)
+    const prismaError = Object.assign(new Error('Unique constraint failed'), { code: 'P2002' })
+    mockFavCreate.mockRejectedValueOnce(prismaError)
+    const res = await POST(new Request('http://localhost/api/favorites', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ caseId: 'clxxxxxx0000000000000000000' })
+    }))
+    expect(res.status).toBe(409)
+  })
 })
 
 describe('DELETE /api/favorites/[caseId]', () => {

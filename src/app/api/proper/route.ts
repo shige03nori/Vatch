@@ -3,11 +3,7 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import { ok, created, unprocessable, serverError, requireStaff } from '@/lib/api'
 import { CreateProperSchema, ProperQuerySchema } from '@/lib/schemas/proper'
-
-function generateTempPassword(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
-  return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
-}
+import { generateTempPassword } from '@/lib/crypto'
 
 export async function GET(request: Request): Promise<NextResponse> {
   const authResult = await requireStaff()

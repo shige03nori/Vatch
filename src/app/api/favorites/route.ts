@@ -34,7 +34,13 @@ export async function POST(request: Request): Promise<NextResponse> {
       data: { userId: session.user.id, caseId: parsed.data.caseId },
     })
     return created(record)
-  } catch {
+  } catch (e: unknown) {
+    if (typeof e === 'object' && e !== null && 'code' in e && (e as { code: string }).code === 'P2002') {
+      return NextResponse.json(
+        { success: false, error: { code: 'CONFLICT', message: 'Already favorited' } },
+        { status: 409 }
+      )
+    }
     return serverError()
   }
 }
