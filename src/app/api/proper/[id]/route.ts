@@ -36,10 +36,9 @@ export async function PATCH(
   if (!parsed.success) return unprocessable(parsed.error.issues)
 
   try {
-    const talent = await prisma.talent.update({
-      where: { id, talentType: 'PROPER' },
-      data: parsed.data,
-    })
+    const existing = await prisma.talent.findUnique({ where: { id } })
+    if (!existing || existing.talentType !== 'PROPER') return notFound()
+    const talent = await prisma.talent.update({ where: { id }, data: parsed.data })
     return ok(talent)
   } catch {
     return serverError()

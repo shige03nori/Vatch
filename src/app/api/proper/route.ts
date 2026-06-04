@@ -56,23 +56,26 @@ export async function POST(request: Request): Promise<NextResponse> {
   const hashedPassword = await bcrypt.hash(tempPassword, 10)
 
   try {
-    const user = await prisma.user.create({
-      data: { name: parsed.data.name, email: parsed.data.email, role: 'PROPER', password: hashedPassword },
-    })
-    const talent = await prisma.talent.create({
-      data: {
-        name:           parsed.data.name,
-        skills:         parsed.data.skills,
-        experience:     parsed.data.experience,
-        desiredRate:    parsed.data.desiredRate,
-        location:       parsed.data.location,
-        workStyle:      parsed.data.workStyle,
-        talentType:     'PROPER',
-        office:         parsed.data.office,
-        userId:         user.id,
-        assignedUserId: session.user.id,
-        ...(parsed.data.availableFrom ? { availableFrom: parsed.data.availableFrom } : {}),
-      },
+    const { user, talent } = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: { name: parsed.data.name, email: parsed.data.email, role: 'PROPER', password: hashedPassword },
+      })
+      const talent = await tx.talent.create({
+        data: {
+          name:           parsed.data.name,
+          skills:         parsed.data.skills,
+          experience:     parsed.data.experience,
+          desiredRate:    parsed.data.desiredRate,
+          location:       parsed.data.location,
+          workStyle:      parsed.data.workStyle,
+          talentType:     'PROPER',
+          office:         parsed.data.office,
+          userId:         user.id,
+          assignedUserId: session.user.id,
+          ...(parsed.data.availableFrom ? { availableFrom: parsed.data.availableFrom } : {}),
+        },
+      })
+      return { user, talent }
     })
     return created({ talent, user: { id: user.id, email: user.email, name: user.name }, tempPassword })
   } catch {

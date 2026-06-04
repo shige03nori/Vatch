@@ -11,6 +11,10 @@ jest.mock('@/lib/prisma', () => ({
   prisma: {
     talent: { findMany: (...a: unknown[]) => mockFindMany(...a), count: (...a: unknown[]) => mockCount(...a), create: (...a: unknown[]) => mockTalentCreate(...a) },
     user:   { findUnique: (...a: unknown[]) => mockFindUnique(...a), create: (...a: unknown[]) => mockUserCreate(...a) },
+    $transaction: (fn: (tx: unknown) => unknown) => fn({
+      user:   { create: (...a: unknown[]) => mockUserCreate(...a) },
+      talent: { create: (...a: unknown[]) => mockTalentCreate(...a) },
+    }),
   },
 }))
 

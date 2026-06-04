@@ -34,6 +34,7 @@ describe('GET /api/proper/[id]', () => {
 describe('PATCH /api/proper/[id]', () => {
   it('updates talent and returns updated record', async () => {
     mockAuth.mockResolvedValueOnce(adminSession)
+    mockFindUnique.mockResolvedValueOnce({ id: 't1', talentType: 'PROPER' })
     mockUpdate.mockResolvedValueOnce({ id: 't1', name: '山田花子更新', talentType: 'PROPER' })
     const res = await PATCH(
       new Request('http://localhost/api/proper/t1', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: '山田花子更新' }) }),
