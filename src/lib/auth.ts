@@ -3,14 +3,12 @@ import NextAuth from 'next-auth';
 import type { Role } from '@prisma/client';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import Credentials from 'next-auth/providers/credentials';
+import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { authConfig } from '@/auth.config';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
-  // PrismaAdapter はOAuth用テーブル管理に使用。
-  // Credentials + jwt strategy の組み合わせでは Session テーブルへの書き込みは行われないが、
-  // Phase 3 で OAuth プロバイダーを追加する際に adapter がそのまま機能する。
   adapter: PrismaAdapter(prisma),
   providers: [
     Credentials({
@@ -23,20 +21,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (typeof credentials?.email !== 'string' || typeof credentials?.password !== 'string') {
           return null;
         }
-
         const user = await prisma.user.findUnique({
           where: { email: credentials.email },
         });
-
         if (!user) return null;
 
-        // Phase 2ではパスワード検証なし（シードで固定ユーザー利用）
-        // Phase 3でbcryptjs導入予定
+        if (user.password) {
+          const isValid = await bcrypt.compare(credentials.password, user.password);
+          if (!isValid) return null;
+        }
         return user;
       },
     }),
   ],
-  // Credentials provider には jwt strategy が必須（database strategy 不可）
   session: { strategy: 'jwt' },
   callbacks: {
     ...authConfig.callbacks,
@@ -47,12 +44,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return token;
     },
     async session({ session, token }) {
-      if (token.sub) {
-        session.user.id = token.sub;
-      }
-      if (token.role) {
-        session.user.role = token.role as Role;
-      }
+      if (token.sub) session.user.id = token.sub;
+      if (token.role) session.user.role = token.role as Role;
       return session;
     },
   },
