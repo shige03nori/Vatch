@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Topbar } from '@/components/layout/Topbar'
+import { EmailSendModal } from '@/components/proposals/EmailSendModal'
 
 // ── 型定義 ──────────────────────────────────────────────────────────────────
 
@@ -70,41 +71,56 @@ function QueueItem({
   item,
   isActive,
   onClick,
+  onEmailClick,
 }: {
   item: ProposalItem
   isActive: boolean
   onClick: () => void
+  onEmailClick: () => void
 }) {
   const pct = Math.round(item.grossProfitRate)
   return (
-    <button
-      onClick={onClick}
-      className={`w-full text-left px-3 py-2.5 rounded-lg border transition-all ${
+    <div
+      className={`w-full px-3 py-2.5 rounded-lg border transition-all ${
         isActive
           ? 'border-vatch-cyan bg-cyan-950/40'
           : 'border-vatch-border hover:border-vatch-border-light hover:bg-vatch-border/30'
       }`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold text-vatch-text-bright truncate">
-            {item.matching.case.title}
-          </p>
-          <p className="text-[10px] text-vatch-muted mt-0.5">
-            {item.matching.case.client} / {item.matching.talent.name}
-          </p>
+      <button
+        onClick={onClick}
+        className="w-full text-left block"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-vatch-text-bright truncate">
+              {item.matching.case.title}
+            </p>
+            <p className="text-[10px] text-vatch-muted mt-0.5">
+              {item.matching.case.client} / {item.matching.talent.name}
+            </p>
+          </div>
+          <span className={`flex-shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${STATUS_STYLES[item.status]}`}>
+            {STATUS_LABEL[item.status]}
+          </span>
         </div>
-        <span className={`flex-shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${STATUS_STYLES[item.status]}`}>
-          {STATUS_LABEL[item.status]}
-        </span>
-      </div>
-      <div className="flex items-center gap-2 mt-1.5">
-        <span className="text-[10px] text-vatch-cyan font-bold">AI {item.matching.score}%</span>
-        <span className={`text-[10px] font-semibold ${item.grossProfitRate >= 10 ? 'text-vatch-green' : 'text-vatch-red'}`}>
-          粗利 {pct}%
-        </span>
-      </div>
-    </button>
+        <div className="flex items-center gap-2 mt-1.5">
+          <span className="text-[10px] text-vatch-cyan font-bold">AI {item.matching.score}%</span>
+          <span className={`text-[10px] font-semibold ${item.grossProfitRate >= 10 ? 'text-vatch-green' : 'text-vatch-red'}`}>
+            粗利 {pct}%
+          </span>
+        </div>
+      </button>
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          onEmailClick()
+        }}
+        className="w-full mt-2 px-3 py-1 text-xs border border-[#38bdf8] text-[#38bdf8] rounded hover:bg-[#38bdf8] hover:text-black transition-colors"
+      >
+        メール送信
+      </button>
+    </div>
   )
 }
 
@@ -119,6 +135,7 @@ export default function ProposalsPage() {
   const [subjectValue, setSubjectValue] = useState('')
   const [bodyValue, setBodyValue] = useState('')
   const [saving, setSaving] = useState(false)
+  const [emailModalOpen, setEmailModalOpen] = useState(false)
 
   function handleSelect(item: ProposalItem) {
     setSelected(item)
@@ -240,6 +257,10 @@ export default function ProposalsPage() {
                   item={item}
                   isActive={item.id === selected.id}
                   onClick={() => handleSelect(item)}
+                  onEmailClick={() => {
+                    setSelected(item)
+                    setEmailModalOpen(true)
+                  }}
                 />
               ))}
             </div>
@@ -417,6 +438,12 @@ export default function ProposalsPage() {
               <span className="text-[11px] font-bold text-vatch-text-dim uppercase tracking-wider">アクション</span>
               <div className="flex flex-col gap-2">
                 <button
+                  onClick={() => setEmailModalOpen(true)}
+                  className="w-full py-2 rounded-lg bg-[#38bdf8] text-black text-[12px] font-semibold hover:bg-[#38bdf8]/90 transition-colors"
+                >
+                  📧 メール送信
+                </button>
+                <button
                   onClick={handleCopy}
                   className="w-full py-2 rounded-lg border border-vatch-border-light text-[12px] font-semibold text-vatch-text-dim hover:text-vatch-text hover:border-vatch-muted transition-colors"
                 >
@@ -442,6 +469,28 @@ export default function ProposalsPage() {
           </aside>
         </div>
       </main>
+
+      {selected && (
+        <EmailSendModal
+          proposal={{
+            id: selected.id,
+            title: selected.subject,
+            case: {
+              title: selected.matching.case.title,
+              client: selected.matching.case.client,
+            },
+            talent: {
+              name: selected.matching.talent.name,
+            },
+            contract: {
+              unitPrice: selected.sellPrice,
+              costPrice: selected.costPrice,
+            },
+          }}
+          open={emailModalOpen}
+          onClose={() => setEmailModalOpen(false)}
+        />
+      )}
     </>
   )
 }

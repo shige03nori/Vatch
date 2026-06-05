@@ -75,6 +75,20 @@ enum Role {
   PROPER
 }
 
+enum EmailJobStatus {
+  PENDING
+  GENERATING
+  SENDING
+  SENT
+  FAILED
+  SCHEDULED
+}
+
+enum EmailSendType {
+  NOW
+  SCHEDULED
+}
+
 // ─────────────────────────────────────────
 // ビジネスデータ
 // ─────────────────────────────────────────
@@ -263,6 +277,7 @@ model Proposal {
   matching   Matching      @relation(fields: [matchingId], references: [id])
   contract   Contract?
   activities ActivityLog[]
+  emailJobs  EmailJob[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -274,6 +289,29 @@ enum ProposalStatus {
   SENT
   REPLIED
   REJECTED
+}
+
+model EmailJob {
+  id              String    @id @default(cuid())
+  proposalId      String
+  proposal        Proposal  @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  status          EmailJobStatus @default(PENDING)
+  generatedContent String? @db.Text
+
+  sendType        EmailSendType
+  scheduledAt     DateTime?
+  sentAt          DateTime?
+
+  attachmentPath  String?
+  errorMessage    String?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([proposalId])
+  @@index([status])
+  @@index([scheduledAt])
 }
 
 model Contract {
