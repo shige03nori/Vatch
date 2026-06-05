@@ -48,6 +48,25 @@ describe('GET /api/contracts', () => {
       expect.objectContaining({ where: expect.objectContaining({ assignedUserId: 'staff-id' }) })
     )
   })
+
+  it('includes case and talent data', async () => {
+    mockAuth.mockResolvedValueOnce(adminSession)
+    mockFindMany.mockResolvedValueOnce([{
+      id: 'ct1',
+      case:   { title: 'テスト案件', client: 'テスト社' },
+      talent: { name: '田中 太郎' },
+    }])
+    mockCount.mockResolvedValueOnce(1)
+    await GET(new Request('http://localhost/api/contracts'))
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({
+          case:   expect.objectContaining({ select: expect.objectContaining({ title: true, client: true }) }),
+          talent: expect.objectContaining({ select: expect.objectContaining({ name: true }) }),
+        }),
+      })
+    )
+  })
 })
 
 describe('POST /api/contracts', () => {
