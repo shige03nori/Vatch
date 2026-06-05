@@ -75,6 +75,20 @@ enum Role {
   PROPER
 }
 
+enum EmailJobStatus {
+  PENDING
+  GENERATING
+  SENDING
+  SENT
+  FAILED
+  SCHEDULED
+}
+
+enum EmailSendType {
+  NOW
+  SCHEDULED
+}
+
 // ─────────────────────────────────────────
 // ビジネスデータ
 // ─────────────────────────────────────────
@@ -282,10 +296,10 @@ model EmailJob {
   proposalId      String
   proposal        Proposal  @relation(fields: [proposalId], references: [id], onDelete: Cascade)
 
-  status          String    @default("PENDING")
-  generatedContent String?
+  status          EmailJobStatus @default(PENDING)
+  generatedContent String? @db.Text
 
-  sendType        String
+  sendType        EmailSendType
   scheduledAt     DateTime?
   sentAt          DateTime?
 
