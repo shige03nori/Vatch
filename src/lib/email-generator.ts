@@ -56,11 +56,11 @@ ${input.talent.cv}
 【指定】
 - トーン：ビジネスライク、誠実、簡潔
 - 言語：日本語
-- 文字数：300〜500字程度`
+- 文字数：300字以上500字以内（500字を超えないこと）`
 
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 1024,
+    max_tokens: 512,
     messages: [
       {
         role: 'user',
