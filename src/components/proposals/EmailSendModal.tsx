@@ -29,8 +29,36 @@ export function EmailSendModal({ proposal, open, onClose }: EmailSendModalProps)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (open) {
-      startGeneration()
+    let cleanup: (() => void) | null = null
+
+    const start = async () => {
+      if (open && step === 'idle') {
+        setStep('generating')
+        setError(null)
+
+        try {
+          const res = await fetch(`/api/proposals/${proposal.id}/send-email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sendType: 'NOW' })
+          })
+
+          if (!res.ok) throw new Error('Failed to generate email')
+
+          const data = await res.json()
+          setJobId(data.jobId)
+          cleanup = await pollJobStatus(data.jobId)
+        } catch (e) {
+          setError(e instanceof Error ? e.message : 'Failed to generate email')
+          setStep('idle')
+        }
+      }
+    }
+
+    start()
+
+    return () => {
+      if (cleanup) cleanup()
     }
   }, [open])
 
@@ -49,9 +77,6 @@ export function EmailSendModal({ proposal, open, onClose }: EmailSendModalProps)
 
       const data = await res.json()
       setJobId(data.jobId)
-
-      // ポーリングで完了を待つ
-      pollJobStatus(data.jobId)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to generate email')
       setStep('idle')
@@ -61,6 +86,7 @@ export function EmailSendModal({ proposal, open, onClose }: EmailSendModalProps)
   async function pollJobStatus(id: string) {
     let attempts = 0
     const maxAttempts = 120 // 60秒（30秒間隔 × 120回）
+    let pollTimeoutId: NodeJS.Timeout | null = null
 
     const poll = async () => {
       try {
@@ -69,15 +95,17 @@ export function EmailSendModal({ proposal, open, onClose }: EmailSendModalProps)
 
         const job = await res.json()
 
-        if (job.status === 'GENERATING') {
+        if (job.status === 'PENDING' || job.status === 'GENERATING') {
+          // Still generating, keep polling
           attempts++
           if (attempts < maxAttempts) {
-            setTimeout(poll, 30000) // 30秒後に再ポーリング
+            pollTimeoutId = setTimeout(poll, 30000) // 30秒後に再ポーリング
           } else {
             setError('Generation timeout')
             setStep('idle')
           }
         } else if (job.status === 'SENDING' || job.status === 'SENT') {
+          // Ready to send
           setEmailContent(job.generatedContent)
           setStep('preview')
         } else if (job.status === 'FAILED') {
@@ -90,7 +118,13 @@ export function EmailSendModal({ proposal, open, onClose }: EmailSendModalProps)
       }
     }
 
+    // Start polling
     poll()
+
+    // Return cleanup function
+    return () => {
+      if (pollTimeoutId) clearTimeout(pollTimeoutId)
+    }
   }
 
   async function handleSend() {
@@ -186,6 +220,8 @@ export function EmailSendModal({ proposal, open, onClose }: EmailSendModalProps)
                     type="datetime-local"
                     value={scheduledAt}
                     onChange={e => setScheduledAt(e.target.value)}
+                    min={new Date().toISOString().slice(0, 16)}
+                    required
                     className="w-full bg-vatch-bg border border-vatch-border rounded px-3 py-2 text-white"
                   />
                 </div>
