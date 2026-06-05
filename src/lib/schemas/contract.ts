@@ -4,7 +4,7 @@ import { z } from 'zod'
 export const CreateContractSchema = z.object({
   caseId:          z.string().cuid(),
   talentId:        z.string().cuid(),
-  proposalId:      z.string().cuid(),
+  proposalId:      z.string().cuid().optional(),
   startDate:       z.coerce.date(),
   endDate:         z.coerce.date().optional(),
   unitPrice:       z.number().int().positive(),

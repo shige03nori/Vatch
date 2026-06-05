@@ -108,4 +108,22 @@ describe('POST /api/contracts', () => {
       expect.objectContaining({ data: expect.objectContaining({ assignedUserId: 'admin-id' }) })
     )
   })
+
+  it('creates a contract without proposalId', async () => {
+    mockAuth.mockResolvedValueOnce(adminSession)
+    mockCreate.mockResolvedValueOnce({ id: 'ct2' })
+    const req = new Request('http://localhost/api/contracts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        caseId:          'clh5u5vw00000356ng7nc4l12',
+        talentId:        'clh5u5vw00000356ng7nc4l13',
+        startDate:       '2026-07-01',
+        unitPrice:       80,
+        costPrice:       65,
+        grossProfitRate: 18.75,
+      }),
+    })
+    expect((await POST(req)).status).toBe(201)
+  })
 })
