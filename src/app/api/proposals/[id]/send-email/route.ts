@@ -61,7 +61,7 @@ export async function POST(request: Request, { params }: Params): Promise<NextRe
     })
 
     // バックグラウンド処理開始（非同期）
-    processEmailJob(job.id, proposal, session.user.id).catch((err) => {
+    processEmailJob(job.id, proposal, job.sendType).catch((err) => {
       console.error('Error processing email job:', err)
     })
 
@@ -75,7 +75,7 @@ export async function POST(request: Request, { params }: Params): Promise<NextRe
 async function processEmailJob(
   jobId: string,
   proposal: any,
-  userId: string
+  sendType: string
 ): Promise<void> {
   try {
     // Status 更新: GENERATING
@@ -114,7 +114,7 @@ async function processEmailJob(
     const attachmentPath = null
 
     // SendType が NOW の場合、即座に送信
-    if (proposal.sendType === 'NOW') {
+    if (sendType === 'NOW') {
       // Status 更新: SENDING
       await prisma.emailJob.update({
         where: { id: jobId },
