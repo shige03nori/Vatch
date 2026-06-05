@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Topbar } from '@/components/layout/Topbar'
+import { EmailSendModal } from '@/components/proposals/EmailSendModal'
 
 // ── 型定義 ──────────────────────────────────────────────────────────────────
 
@@ -119,6 +120,7 @@ export default function ProposalsPage() {
   const [subjectValue, setSubjectValue] = useState('')
   const [bodyValue, setBodyValue] = useState('')
   const [saving, setSaving] = useState(false)
+  const [emailModalOpen, setEmailModalOpen] = useState(false)
 
   function handleSelect(item: ProposalItem) {
     setSelected(item)
@@ -417,6 +419,12 @@ export default function ProposalsPage() {
               <span className="text-[11px] font-bold text-vatch-text-dim uppercase tracking-wider">アクション</span>
               <div className="flex flex-col gap-2">
                 <button
+                  onClick={() => setEmailModalOpen(true)}
+                  className="w-full py-2 rounded-lg bg-[#38bdf8] text-black text-[12px] font-semibold hover:bg-[#38bdf8]/90 transition-colors"
+                >
+                  📧 メール送信
+                </button>
+                <button
                   onClick={handleCopy}
                   className="w-full py-2 rounded-lg border border-vatch-border-light text-[12px] font-semibold text-vatch-text-dim hover:text-vatch-text hover:border-vatch-muted transition-colors"
                 >
@@ -442,6 +450,14 @@ export default function ProposalsPage() {
           </aside>
         </div>
       </main>
+
+      {selected && (
+        <EmailSendModal
+          proposal={selected}
+          open={emailModalOpen}
+          onClose={() => setEmailModalOpen(false)}
+        />
+      )}
     </>
   )
 }
