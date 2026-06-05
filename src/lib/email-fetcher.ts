@@ -61,6 +61,8 @@ export async function fetchUnreadEmails(config: ImapConfig): Promise<FetchedEmai
       user: config.imapUser,
       password: config.imapPass,
       tls: config.imapPort === 993,
+      // port 143 (STARTTLS) は autotls で自動アップグレード
+      ...(config.imapPort !== 993 ? { autotls: 'always' as const } : {}),
       tlsOptions: { rejectUnauthorized: false },
       authTimeout: 10000,
     },
@@ -98,5 +100,6 @@ export async function fetchUnreadEmails(config: ImapConfig): Promise<FetchedEmai
     })
   }
 
-  return results
+  // Re: / RE: で始まる返信メールを除外
+  return results.filter((m) => !/^Re:/i.test(m.subject))
 }

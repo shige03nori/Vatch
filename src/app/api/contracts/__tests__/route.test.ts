@@ -48,6 +48,25 @@ describe('GET /api/contracts', () => {
       expect.objectContaining({ where: expect.objectContaining({ assignedUserId: 'staff-id' }) })
     )
   })
+
+  it('includes case and talent data', async () => {
+    mockAuth.mockResolvedValueOnce(adminSession)
+    mockFindMany.mockResolvedValueOnce([{
+      id: 'ct1',
+      case:   { title: 'テスト案件', client: 'テスト社' },
+      talent: { name: '田中 太郎' },
+    }])
+    mockCount.mockResolvedValueOnce(1)
+    await GET(new Request('http://localhost/api/contracts'))
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({
+          case:   expect.objectContaining({ select: expect.objectContaining({ title: true, client: true }) }),
+          talent: expect.objectContaining({ select: expect.objectContaining({ name: true }) }),
+        }),
+      })
+    )
+  })
 })
 
 describe('POST /api/contracts', () => {
@@ -107,5 +126,23 @@ describe('POST /api/contracts', () => {
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ assignedUserId: 'admin-id' }) })
     )
+  })
+
+  it('creates a contract without proposalId', async () => {
+    mockAuth.mockResolvedValueOnce(adminSession)
+    mockCreate.mockResolvedValueOnce({ id: 'ct2' })
+    const req = new Request('http://localhost/api/contracts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        caseId:          'clh5u5vw00000356ng7nc4l12',
+        talentId:        'clh5u5vw00000356ng7nc4l13',
+        startDate:       '2026-07-01',
+        unitPrice:       80,
+        costPrice:       65,
+        grossProfitRate: 18.75,
+      }),
+    })
+    expect((await POST(req)).status).toBe(201)
   })
 })

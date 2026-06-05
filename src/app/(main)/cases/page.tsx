@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useSession } from 'next-auth/react';
 import { Topbar } from '@/components/layout/Topbar';
 import { Modal } from '@/components/ui/Modal';
 
@@ -25,7 +26,7 @@ type EditCaseForm = {
   client: string
   clientEmail: string
   unitPrice: number
-  startDate: string   // YYYY-MM-DD
+  startDate: string
   workStyle: WorkStyle
   status: CaseStatus
 }
@@ -85,6 +86,9 @@ function SummaryCards({ items }: { items: CaseItem[] }) {
 }
 
 export default function CasesPage() {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === 'ADMIN';
+
   const [cases, setCases] = useState<CaseItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -95,6 +99,10 @@ export default function CasesPage() {
   const [editForm, setEditForm] = useState<Partial<EditCaseForm>>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // 削除確認: 'idle' | 'confirm' | 'deleting'
+  const [deleteState, setDeleteState] = useState<'idle' | 'confirm' | 'deleting'>('idle');
+  // 一覧行の削除確認: id | null
+  const [rowDeleteId, setRowDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/cases?limit=200')
@@ -104,46 +112,59 @@ export default function CasesPage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedCase) return
-    setEditing(false)
-    setSaveError(null)
-    setEditForm(toEditCaseForm(selectedCase))
-  }, [selectedCase])
+    if (!selectedCase) return;
+    setEditing(false);
+    setSaveError(null);
+    setDeleteState('idle');
+    setEditForm(toEditCaseForm(selectedCase));
+  }, [selectedCase]);
 
   const closeModal = useCallback(() => {
-    setSelectedCase(null)
-    setEditing(false)
-    setSaveError(null)
-  }, [])
+    setSelectedCase(null);
+    setEditing(false);
+    setSaveError(null);
+    setDeleteState('idle');
+  }, []);
 
   async function handleSave() {
-    if (!selectedCase) return
-    if (!editForm.startDate) {
-      setSaveError('開始時期を入力してください')
-      return
-    }
-    setSaving(true)
-    setSaveError(null)
+    if (!selectedCase) return;
+    if (!editForm.startDate) { setSaveError('開始時期を入力してください'); return; }
+    setSaving(true);
+    setSaveError(null);
     try {
       const res = await fetch(`/api/cases/${selectedCase.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...editForm,
-          startDate: new Date(editForm.startDate).toISOString(),
-        }),
-      })
-      let json: { data?: CaseItem; error?: { message?: string } } = {}
-      try { json = await res.json() } catch { /* non-JSON body */ }
-      if (!res.ok) throw new Error(json.error?.message ?? '保存に失敗しました')
-      const updated: CaseItem = json.data!
-      setCases((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
-      setSelectedCase(updated)
-      // setEditing(false) is handled by the useEffect watching selectedCase
+        body: JSON.stringify({ ...editForm, startDate: new Date(editForm.startDate).toISOString() }),
+      });
+      let json: { data?: CaseItem; error?: { message?: string } } = {};
+      try { json = await res.json(); } catch { /* non-JSON */ }
+      if (!res.ok) throw new Error(json.error?.message ?? '保存に失敗しました');
+      const updated: CaseItem = json.data!;
+      setCases((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+      setSelectedCase(updated);
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : '保存に失敗しました')
+      setSaveError(err instanceof Error ? err.message : '保存に失敗しました');
     } finally {
-      setSaving(false)
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(id: string, fromModal = false) {
+    if (fromModal) setDeleteState('deleting');
+    try {
+      const res = await fetch(`/api/cases/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({})) as { error?: { message?: string } };
+        throw new Error(json.error?.message ?? '削除に失敗しました');
+      }
+      setCases((prev) => prev.filter((c) => c.id !== id));
+      if (fromModal) closeModal();
+      else setRowDeleteId(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '削除に失敗しました');
+      if (fromModal) setDeleteState('idle');
+      else setRowDeleteId(null);
     }
   }
 
@@ -241,6 +262,7 @@ export default function CasesPage() {
                       const statusCfg = STATUS_CONFIG[item.status];
                       const workCfg = WORK_STYLE_CONFIG[item.workStyle];
                       const startDate = new Date(item.startDate).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' });
+                      const isConfirmingDelete = rowDeleteId === item.id;
                       return (
                         <tr
                           key={item.id}
@@ -275,13 +297,40 @@ export default function CasesPage() {
                               {statusCfg.label}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-center">
-                            <button
-                              className="px-3 py-1 text-xs border border-vatch-border rounded hover:border-[#38bdf8] hover:text-[#38bdf8] text-vatch-muted transition-colors"
-                              onClick={() => setSelectedCase(item)}
-                            >
-                              詳細
-                            </button>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                className="px-3 py-1 text-xs border border-vatch-border rounded hover:border-[#38bdf8] hover:text-[#38bdf8] text-vatch-muted transition-colors"
+                                onClick={() => { setRowDeleteId(null); setSelectedCase(item); }}
+                              >
+                                詳細
+                              </button>
+                              {isAdmin && (
+                                isConfirmingDelete ? (
+                                  <>
+                                    <button
+                                      onClick={() => handleDelete(item.id)}
+                                      className="px-3 py-1 text-xs bg-red-500/20 border border-red-500 text-red-400 rounded transition-colors hover:bg-red-500/30"
+                                    >
+                                      確認
+                                    </button>
+                                    <button
+                                      onClick={() => setRowDeleteId(null)}
+                                      className="px-3 py-1 text-xs border border-vatch-border text-vatch-muted rounded hover:text-white transition-colors"
+                                    >
+                                      ✕
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button
+                                    onClick={() => setRowDeleteId(item.id)}
+                                    className="px-3 py-1 text-xs border border-vatch-border rounded hover:border-red-500 hover:text-red-400 text-vatch-muted transition-colors"
+                                  >
+                                    削除
+                                  </button>
+                                )
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -294,186 +343,160 @@ export default function CasesPage() {
         </div>
 
         <Modal open={selectedCase !== null} onClose={closeModal}>
-        <div className="bg-vatch-surface border border-vatch-border rounded-xl shadow-2xl overflow-hidden">
-          {/* ヘッダー */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-vatch-border">
-            <h2 id="modal-title" className="text-base font-bold text-white truncate pr-4">
-              {selectedCase?.title}
-            </h2>
-            <div className="flex items-center gap-2 shrink-0">
-              {editing ? (
-                <>
-                  <button
-                    onClick={() => { setEditing(false); setSaveError(null); setEditForm(toEditCaseForm(selectedCase!)) }}
-                    className="px-3 py-1.5 text-xs border border-vatch-border text-vatch-muted rounded-lg hover:border-[#38bdf8] hover:text-[#38bdf8] transition-colors"
-                  >
-                    キャンセル
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="px-3 py-1.5 text-xs bg-[#38bdf8] text-black font-semibold rounded-lg disabled:opacity-50"
-                  >
-                    {saving ? '保存中...' : '保存'}
-                  </button>
-                </>
-              ) : (
+          <div className="bg-vatch-surface border border-vatch-border rounded-xl shadow-2xl overflow-hidden">
+            {/* ヘッダー */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-vatch-border">
+              <h2 id="modal-title" className="text-base font-bold text-white truncate pr-4">
+                {selectedCase?.title}
+              </h2>
+              <div className="flex items-center gap-2 shrink-0">
+                {editing ? (
+                  <>
+                    <button
+                      onClick={() => { setEditing(false); setSaveError(null); setEditForm(toEditCaseForm(selectedCase!)); }}
+                      className="px-3 py-1.5 text-xs border border-vatch-border text-vatch-muted rounded-lg hover:border-[#38bdf8] hover:text-[#38bdf8] transition-colors"
+                    >
+                      キャンセル
+                    </button>
+                    <button
+                      onClick={handleSave}
+                      disabled={saving}
+                      className="px-3 py-1.5 text-xs bg-[#38bdf8] text-black font-semibold rounded-lg disabled:opacity-50"
+                    >
+                      {saving ? '保存中...' : '保存'}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {isAdmin && (
+                      deleteState === 'confirm' ? (
+                        <>
+                          <button
+                            onClick={() => handleDelete(selectedCase!.id, true)}
+                            disabled={deleteState === 'deleting' as unknown as boolean}
+                            className="px-3 py-1.5 text-xs bg-red-500/20 border border-red-500 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
+                          >
+                            本当に削除
+                          </button>
+                          <button
+                            onClick={() => setDeleteState('idle')}
+                            className="px-3 py-1.5 text-xs border border-vatch-border text-vatch-muted rounded-lg hover:text-white transition-colors"
+                          >
+                            キャンセル
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => setDeleteState('confirm')}
+                          className="px-3 py-1.5 text-xs border border-vatch-border text-vatch-muted rounded-lg hover:border-red-500 hover:text-red-400 transition-colors"
+                        >
+                          削除
+                        </button>
+                      )
+                    )}
+                    <button
+                      onClick={() => setEditing(true)}
+                      className="px-3 py-1.5 text-xs border border-vatch-border text-vatch-muted rounded-lg hover:border-[#38bdf8] hover:text-[#38bdf8] transition-colors"
+                    >
+                      ✏ 編集
+                    </button>
+                  </>
+                )}
                 <button
-                  onClick={() => setEditing(true)}
-                  className="px-3 py-1.5 text-xs border border-vatch-border text-vatch-muted rounded-lg hover:border-[#38bdf8] hover:text-[#38bdf8] transition-colors"
+                  onClick={closeModal}
+                  className="text-vatch-muted hover:text-white transition-colors text-lg leading-none"
+                  aria-label="閉じる"
                 >
-                  ✏ 編集
+                  ✕
                 </button>
+              </div>
+            </div>
+
+            {/* ボディ */}
+            <div className="px-5 py-4 space-y-4">
+              {editing ? (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <label className="block text-[10px] text-vatch-muted uppercase tracking-wide mb-1">案件名</label>
+                    <input type="text" value={editForm.title ?? ''} onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))} className="w-full bg-vatch-bg border border-vatch-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#38bdf8] transition-colors" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-vatch-muted uppercase tracking-wide mb-1">クライアント</label>
+                    <input type="text" value={editForm.client ?? ''} onChange={(e) => setEditForm((f) => ({ ...f, client: e.target.value }))} className="w-full bg-vatch-bg border border-vatch-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#38bdf8] transition-colors" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-vatch-muted uppercase tracking-wide mb-1">クライアントメール</label>
+                    <input type="email" value={editForm.clientEmail ?? ''} onChange={(e) => setEditForm((f) => ({ ...f, clientEmail: e.target.value }))} className="w-full bg-vatch-bg border border-vatch-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#38bdf8] transition-colors" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-vatch-muted uppercase tracking-wide mb-1">単価（万円）</label>
+                    <input type="number" min={1} value={editForm.unitPrice ?? ''} onChange={(e) => setEditForm((f) => ({ ...f, unitPrice: Number(e.target.value) }))} className="w-full bg-vatch-bg border border-vatch-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#38bdf8] transition-colors" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-vatch-muted uppercase tracking-wide mb-1">開始時期</label>
+                    <input type="date" value={editForm.startDate ?? ''} onChange={(e) => setEditForm((f) => ({ ...f, startDate: e.target.value }))} className="w-full bg-vatch-bg border border-vatch-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#38bdf8] transition-colors" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-vatch-muted uppercase tracking-wide mb-1">勤務形式</label>
+                    <select value={editForm.workStyle ?? 'REMOTE'} onChange={(e) => setEditForm((f) => ({ ...f, workStyle: e.target.value as WorkStyle }))} className="w-full bg-vatch-bg border border-vatch-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#38bdf8] transition-colors cursor-pointer">
+                      {(Object.keys(WORK_STYLE_CONFIG) as WorkStyle[]).map((w) => (<option key={w} value={w}>{WORK_STYLE_CONFIG[w].label}</option>))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-vatch-muted uppercase tracking-wide mb-1">ステータス</label>
+                    <select value={editForm.status ?? 'OPEN'} onChange={(e) => setEditForm((f) => ({ ...f, status: e.target.value as CaseStatus }))} className="w-full bg-vatch-bg border border-vatch-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#38bdf8] transition-colors cursor-pointer">
+                      {(Object.keys(STATUS_CONFIG) as CaseStatus[]).map((s) => (<option key={s} value={s}>{STATUS_CONFIG[s].label}</option>))}
+                    </select>
+                  </div>
+                  {saveError && <p className="col-span-2 text-red-400 text-xs">{saveError}</p>}
+                </div>
+              ) : (
+                selectedCase && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-[10px] text-vatch-muted uppercase tracking-wide mb-1">クライアント</div>
+                      <div className="text-sm text-white">{selectedCase.client}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-vatch-muted uppercase tracking-wide mb-1">クライアントメール</div>
+                      <div className="text-sm text-white">{selectedCase.clientEmail ?? '—'}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-vatch-muted uppercase tracking-wide mb-1">単価</div>
+                      <div className="text-sm text-white">{selectedCase.unitPrice}万円</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-vatch-muted uppercase tracking-wide mb-1">開始時期</div>
+                      <div className="text-sm text-white">{new Date(selectedCase.startDate).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' })}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-vatch-muted uppercase tracking-wide mb-1">勤務形式</div>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${WORK_STYLE_CONFIG[selectedCase.workStyle].color} ${WORK_STYLE_CONFIG[selectedCase.workStyle].bg}`}>
+                        {WORK_STYLE_CONFIG[selectedCase.workStyle].label}
+                      </span>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-vatch-muted uppercase tracking-wide mb-1">ステータス</div>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_CONFIG[selectedCase.status].color} ${STATUS_CONFIG[selectedCase.status].bg}`}>
+                        {STATUS_CONFIG[selectedCase.status].label}
+                      </span>
+                    </div>
+                    <div className="col-span-2">
+                      <div className="text-[10px] text-vatch-muted uppercase tracking-wide mb-1">スキル</div>
+                      <div className="flex flex-wrap gap-1">
+                        {selectedCase.skills.map((s) => (<span key={s} className="px-2 py-0.5 bg-vatch-border/50 text-vatch-muted rounded text-xs">{s}</span>))}
+                      </div>
+                    </div>
+                    <div className="col-span-2">
+                      <div className="text-[10px] text-vatch-muted uppercase tracking-wide mb-1">登録日時</div>
+                      <div className="text-sm text-vatch-muted">{new Date(selectedCase.createdAt).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' })}</div>
+                    </div>
+                  </div>
+                )
               )}
-              <button
-                onClick={closeModal}
-                className="text-vatch-muted hover:text-white transition-colors text-lg leading-none"
-                aria-label="閉じる"
-              >
-                ✕
-              </button>
             </div>
           </div>
-
-          {/* ボディ */}
-          <div className="px-5 py-4 space-y-4">
-            {editing ? (
-              /* 編集フォーム */
-              <div className="grid grid-cols-2 gap-4">
-                {/* title */}
-                <div className="col-span-2">
-                  <label className="block text-[10px] text-vatch-muted uppercase tracking-wide mb-1">案件名</label>
-                  <input
-                    type="text"
-                    value={editForm.title ?? ''}
-                    onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
-                    className="w-full bg-vatch-bg border border-vatch-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#38bdf8] transition-colors"
-                  />
-                </div>
-                {/* client */}
-                <div>
-                  <label className="block text-[10px] text-vatch-muted uppercase tracking-wide mb-1">クライアント</label>
-                  <input
-                    type="text"
-                    value={editForm.client ?? ''}
-                    onChange={(e) => setEditForm((f) => ({ ...f, client: e.target.value }))}
-                    className="w-full bg-vatch-bg border border-vatch-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#38bdf8] transition-colors"
-                  />
-                </div>
-                {/* clientEmail */}
-                <div>
-                  <label className="block text-[10px] text-vatch-muted uppercase tracking-wide mb-1">クライアントメール</label>
-                  <input
-                    type="email"
-                    value={editForm.clientEmail ?? ''}
-                    onChange={(e) => setEditForm((f) => ({ ...f, clientEmail: e.target.value }))}
-                    className="w-full bg-vatch-bg border border-vatch-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#38bdf8] transition-colors"
-                  />
-                </div>
-                {/* unitPrice */}
-                <div>
-                  <label className="block text-[10px] text-vatch-muted uppercase tracking-wide mb-1">単価（万円）</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={editForm.unitPrice ?? ''}
-                    onChange={(e) => setEditForm((f) => ({ ...f, unitPrice: Number(e.target.value) }))}
-                    className="w-full bg-vatch-bg border border-vatch-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#38bdf8] transition-colors"
-                  />
-                </div>
-                {/* startDate */}
-                <div>
-                  <label className="block text-[10px] text-vatch-muted uppercase tracking-wide mb-1">開始時期</label>
-                  <input
-                    type="date"
-                    value={editForm.startDate ?? ''}
-                    onChange={(e) => setEditForm((f) => ({ ...f, startDate: e.target.value }))}
-                    className="w-full bg-vatch-bg border border-vatch-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#38bdf8] transition-colors"
-                  />
-                </div>
-                {/* workStyle */}
-                <div>
-                  <label className="block text-[10px] text-vatch-muted uppercase tracking-wide mb-1">勤務形式</label>
-                  <select
-                    value={editForm.workStyle ?? 'REMOTE'}
-                    onChange={(e) => setEditForm((f) => ({ ...f, workStyle: e.target.value as WorkStyle }))}
-                    className="w-full bg-vatch-bg border border-vatch-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#38bdf8] transition-colors cursor-pointer"
-                  >
-                    {(Object.keys(WORK_STYLE_CONFIG) as WorkStyle[]).map((w) => (
-                      <option key={w} value={w}>{WORK_STYLE_CONFIG[w].label}</option>
-                    ))}
-                  </select>
-                </div>
-                {/* status */}
-                <div>
-                  <label className="block text-[10px] text-vatch-muted uppercase tracking-wide mb-1">ステータス</label>
-                  <select
-                    value={editForm.status ?? 'OPEN'}
-                    onChange={(e) => setEditForm((f) => ({ ...f, status: e.target.value as CaseStatus }))}
-                    className="w-full bg-vatch-bg border border-vatch-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#38bdf8] transition-colors cursor-pointer"
-                  >
-                    {(Object.keys(STATUS_CONFIG) as CaseStatus[]).map((s) => (
-                      <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>
-                    ))}
-                  </select>
-                </div>
-                {/* error */}
-                {saveError && <p className="col-span-2 text-red-400 text-xs">{saveError}</p>}
-              </div>
-            ) : (
-              /* 表示モード */
-              selectedCase && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-[10px] text-vatch-muted uppercase tracking-wide mb-1">クライアント</div>
-                    <div className="text-sm text-white">{selectedCase.client}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-vatch-muted uppercase tracking-wide mb-1">クライアントメール</div>
-                    <div className="text-sm text-white">{selectedCase.clientEmail ?? '—'}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-vatch-muted uppercase tracking-wide mb-1">単価</div>
-                    <div className="text-sm text-white">{selectedCase.unitPrice}万円</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-vatch-muted uppercase tracking-wide mb-1">開始時期</div>
-                    <div className="text-sm text-white">
-                      {new Date(selectedCase.startDate).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' })}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-vatch-muted uppercase tracking-wide mb-1">勤務形式</div>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${WORK_STYLE_CONFIG[selectedCase.workStyle].color} ${WORK_STYLE_CONFIG[selectedCase.workStyle].bg}`}>
-                      {WORK_STYLE_CONFIG[selectedCase.workStyle].label}
-                    </span>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-vatch-muted uppercase tracking-wide mb-1">ステータス</div>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_CONFIG[selectedCase.status].color} ${STATUS_CONFIG[selectedCase.status].bg}`}>
-                      {STATUS_CONFIG[selectedCase.status].label}
-                    </span>
-                  </div>
-                  <div className="col-span-2">
-                    <div className="text-[10px] text-vatch-muted uppercase tracking-wide mb-1">スキル</div>
-                    <div className="flex flex-wrap gap-1">
-                      {selectedCase.skills.map((s) => (
-                        <span key={s} className="px-2 py-0.5 bg-vatch-border/50 text-vatch-muted rounded text-xs">{s}</span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="col-span-2">
-                    <div className="text-[10px] text-vatch-muted uppercase tracking-wide mb-1">登録日時</div>
-                    <div className="text-sm text-vatch-muted">
-                      {new Date(selectedCase.createdAt).toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' })}
-                    </div>
-                  </div>
-                </div>
-              )
-            )}
-          </div>
-        </div>
-      </Modal>
+        </Modal>
       </main>
     </div>
   );
