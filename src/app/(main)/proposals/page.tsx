@@ -472,7 +472,21 @@ export default function ProposalsPage() {
 
       {selected && (
         <EmailSendModal
-          proposal={selected}
+          proposal={{
+            id: selected.id,
+            title: selected.subject,
+            case: {
+              title: selected.matching.case.title,
+              client: selected.matching.case.client,
+            },
+            talent: {
+              name: selected.matching.talent.name,
+            },
+            contract: {
+              unitPrice: selected.sellPrice,
+              costPrice: selected.costPrice,
+            },
+          }}
           open={emailModalOpen}
           onClose={() => setEmailModalOpen(false)}
         />

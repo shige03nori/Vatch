@@ -373,7 +373,6 @@ export default function CasesPage() {
                         <>
                           <button
                             onClick={() => handleDelete(selectedCase!.id, true)}
-                            disabled={deleteState === 'deleting' as unknown as boolean}
                             className="px-3 py-1.5 text-xs bg-red-500/20 border border-red-500 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
                           >
                             本当に削除

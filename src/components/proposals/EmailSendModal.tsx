@@ -241,7 +241,7 @@ export function EmailSendModal({ proposal, open, onClose }: EmailSendModalProps)
                   disabled={sendType === 'SCHEDULED' && !scheduledAt}
                   className="flex-1 py-2.5 bg-[#38bdf8] text-black font-bold rounded disabled:opacity-50"
                 >
-                  {step === 'sending' ? '送信中...' : '送信'}
+                  送信
                 </button>
               </div>
             </div>
