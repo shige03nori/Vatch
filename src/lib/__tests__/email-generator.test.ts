@@ -34,8 +34,8 @@ describe('generateEmailContent', () => {
     })
 
     expect(typeof content).toBe('string')
-    expect(content.length).toBeGreaterThan(100)
-    expect(content.length).toBeLessThan(2000)
+    expect(content.length).toBeGreaterThanOrEqual(300)
+    expect(content.length).toBeLessThanOrEqual(500)
   })
 
   it('includes talent name in content', async () => {

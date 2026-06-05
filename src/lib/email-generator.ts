@@ -24,8 +24,7 @@ interface GenerateEmailInput {
 
 export async function generateEmailContent(input: GenerateEmailInput): Promise<string> {
   const client = new Anthropic({
-    apiKey: process.env.CLAUDE_API_KEY,
-    dangerouslyAllowBrowser: true
+    apiKey: process.env.CLAUDE_API_KEY
   })
 
   const prompt = `以下の情報をもとに、提案メール本文を生成してください。
@@ -40,7 +39,12 @@ export async function generateEmailContent(input: GenerateEmailInput): Promise<s
 
 【契約条件】
 - 契約売値：${input.contract.unitPrice}万円
+- 原価：${input.contract.costPrice}万円
+- 粗利率：${input.contract.grossProfitRate.toFixed(1)}%
 - 契約開始日：${input.proposal.startDate.toISOString().split('T')[0]}
+
+【提案人材の経歴書】
+${input.talent.cv}
 
 メール本文は以下の構成で作成してください：
 1. 挨拶
