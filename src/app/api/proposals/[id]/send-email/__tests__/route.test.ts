@@ -32,6 +32,19 @@ jest.mock('@/lib/email-encryptor', () => ({
   encryptContent: jest.fn((content: string) => `encrypted:${content}`),
 }))
 
+// --- fs モック ---
+jest.mock('fs', () => ({
+  existsSync: jest.fn(),
+}))
+import fs from 'fs'
+const mockExistsSync = fs.existsSync as jest.Mock
+
+// --- file-storage モック ---
+const mockGetUrl = jest.fn()
+jest.mock('@/lib/file-storage', () => ({
+  getFileStorage: () => ({ getUrl: (...args: unknown[]) => mockGetUrl(...args) }),
+}))
+
 const adminSession = { user: { id: 'admin-id', role: 'ADMIN' } }
 const staffSession = { user: { id: 'staff-id', role: 'STAFF' } }
 const otherSession = { user: { id: 'other-id', role: 'STAFF' } }
@@ -57,6 +70,7 @@ const baseProposal = {
       title: 'React Developer',
       client: 'ACME Inc',
       assignedUserId: 'staff-id',
+      startDate: new Date('2026-07-01'),
     },
     talent: {
       id: 'talent-1',
@@ -64,6 +78,8 @@ const baseProposal = {
       email: 'taro@example.com',
       skills: ['React', 'Node.js'],
       experience: 5,
+      resumeKey: 'resumes/talent-1-123456.pdf',
+      resumeFilename: '田中太郎_経歴書.pdf',
     },
   },
   case: {
@@ -101,9 +117,12 @@ beforeEach(() => {
   mockEmailJobCreate.mockResolvedValue({
     id: 'job-1',
     status: 'PENDING',
+    sendType: 'NOW',
     proposalId: 'prop-1',
   })
   mockEmailJobUpdate.mockResolvedValue({})
+  mockGetUrl.mockReturnValue('/app/uploads/resumes/talent-1-123456.pdf')
+  mockExistsSync.mockReturnValue(true)
 })
 
 // ─────────────────────────────────────────────
@@ -204,12 +223,83 @@ describe('POST /api/proposals/[id]/send-email', () => {
     )
   })
 
-  it('22: sendType が不正な値', async () => {
+  it('422: sendType が不正な値', async () => {
     mockAuth.mockResolvedValueOnce(staffSession)
     const res = await POST(
       makeReq('prop-1', { sendType: 'INVALID' }),
       { params: Promise.resolve({ id: 'prop-1' }) }
     )
     expect(res.status).toBe(422)
+  })
+
+  describe('経歴書添付', () => {
+    it('resumeKey がありファイルが存在する場合、emailJobUpdate に attachmentPath が渡される', async () => {
+      mockAuth.mockResolvedValueOnce(staffSession)
+      mockProposalFindUnique.mockResolvedValueOnce(baseProposal)
+      mockGetUrl.mockReturnValue('/app/uploads/resumes/talent-1-123456.pdf')
+      mockExistsSync.mockReturnValue(true)
+
+      await POST(
+        makeReq('prop-1', { sendType: 'NOW' }),
+        { params: Promise.resolve({ id: 'prop-1' }) }
+      )
+      await new Promise(resolve => setImmediate(resolve))
+
+      const updateCalls = mockEmailJobUpdate.mock.calls
+      const sendingCall = updateCalls.find(
+        (call) => call[0]?.data?.status === 'SENDING'
+      )
+      expect(sendingCall).toBeDefined()
+      expect(sendingCall![0].data.attachmentPath).toBe('/app/uploads/resumes/talent-1-123456.pdf')
+    })
+
+    it('resumeKey があるがファイルが存在しない場合、attachmentPath は null になる', async () => {
+      mockAuth.mockResolvedValueOnce(staffSession)
+      mockProposalFindUnique.mockResolvedValueOnce(baseProposal)
+      mockGetUrl.mockReturnValue('/app/uploads/resumes/talent-1-123456.pdf')
+      mockExistsSync.mockReturnValue(false)
+
+      await POST(
+        makeReq('prop-1', { sendType: 'NOW' }),
+        { params: Promise.resolve({ id: 'prop-1' }) }
+      )
+      await new Promise(resolve => setImmediate(resolve))
+
+      const updateCalls = mockEmailJobUpdate.mock.calls
+      const sendingCall = updateCalls.find(
+        (call) => call[0]?.data?.status === 'SENDING'
+      )
+      expect(sendingCall).toBeDefined()
+      expect(sendingCall![0].data.attachmentPath).toBeNull()
+    })
+
+    it('resumeKey が null の場合、attachmentPath は null になる', async () => {
+      const proposalWithoutResume = {
+        ...baseProposal,
+        matching: {
+          ...baseProposal.matching,
+          talent: {
+            ...baseProposal.matching.talent,
+            resumeKey: null,
+            resumeFilename: null,
+          },
+        },
+      }
+      mockAuth.mockResolvedValueOnce(staffSession)
+      mockProposalFindUnique.mockResolvedValueOnce(proposalWithoutResume)
+
+      await POST(
+        makeReq('prop-1', { sendType: 'NOW' }),
+        { params: Promise.resolve({ id: 'prop-1' }) }
+      )
+      await new Promise(resolve => setImmediate(resolve))
+
+      const updateCalls = mockEmailJobUpdate.mock.calls
+      const sendingCall = updateCalls.find(
+        (call) => call[0]?.data?.status === 'SENDING'
+      )
+      expect(sendingCall).toBeDefined()
+      expect(sendingCall![0].data.attachmentPath).toBeNull()
+    })
   })
 })
