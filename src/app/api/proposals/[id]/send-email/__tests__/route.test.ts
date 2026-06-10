@@ -40,9 +40,9 @@ import fs from 'fs'
 const mockExistsSync = fs.existsSync as jest.Mock
 
 // --- file-storage モック ---
-const mockGetUrl = jest.fn()
+const mockGetLocalPath = jest.fn()
 jest.mock('@/lib/file-storage', () => ({
-  getFileStorage: () => ({ getUrl: (...args: unknown[]) => mockGetUrl(...args) }),
+  getFileStorage: () => ({ getLocalPath: (...args: unknown[]) => mockGetLocalPath(...args) }),
 }))
 
 const adminSession = { user: { id: 'admin-id', role: 'ADMIN' } }
@@ -121,7 +121,7 @@ beforeEach(() => {
     proposalId: 'prop-1',
   })
   mockEmailJobUpdate.mockResolvedValue({})
-  mockGetUrl.mockReturnValue('/app/uploads/resumes/talent-1-123456.pdf')
+  mockGetLocalPath.mockReturnValue('/app/uploads/resumes/talent-1-123456.pdf')
   mockExistsSync.mockReturnValue(true)
 })
 
@@ -236,7 +236,7 @@ describe('POST /api/proposals/[id]/send-email', () => {
     it('resumeKey がありファイルが存在する場合、emailJobUpdate に attachmentPath が渡される', async () => {
       mockAuth.mockResolvedValueOnce(staffSession)
       mockProposalFindUnique.mockResolvedValueOnce(baseProposal)
-      mockGetUrl.mockReturnValue('/app/uploads/resumes/talent-1-123456.pdf')
+      mockGetLocalPath.mockReturnValue('/app/uploads/resumes/talent-1-123456.pdf')
       mockExistsSync.mockReturnValue(true)
 
       await POST(
@@ -256,7 +256,7 @@ describe('POST /api/proposals/[id]/send-email', () => {
     it('resumeKey があるがファイルが存在しない場合、attachmentPath は null になる', async () => {
       mockAuth.mockResolvedValueOnce(staffSession)
       mockProposalFindUnique.mockResolvedValueOnce(baseProposal)
-      mockGetUrl.mockReturnValue('/app/uploads/resumes/talent-1-123456.pdf')
+      mockGetLocalPath.mockReturnValue('/app/uploads/resumes/talent-1-123456.pdf')
       mockExistsSync.mockReturnValue(false)
 
       await POST(
