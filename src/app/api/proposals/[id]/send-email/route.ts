@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import fs from 'fs'
+import { access } from 'fs/promises'
 import { prisma } from '@/lib/prisma'
 import { ok, forbidden, notFound, unprocessable, serverError, requireAuth } from '@/lib/api'
 import { SendEmailRequestSchema } from '@/lib/schemas/email-job'
@@ -116,8 +116,13 @@ async function processEmailJob(
     let attachmentPath: string | null = null
     if (resumeKey) {
       const localPath = getFileStorage().getLocalPath(resumeKey)
-      if (localPath && fs.existsSync(localPath)) {
-        attachmentPath = localPath
+      if (localPath) {
+        try {
+          await access(localPath)
+          attachmentPath = localPath
+        } catch {
+          // ファイルが存在しない場合は添付なしで続行
+        }
       }
     }
 

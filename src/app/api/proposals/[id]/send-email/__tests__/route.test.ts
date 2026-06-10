@@ -32,12 +32,11 @@ jest.mock('@/lib/email-encryptor', () => ({
   encryptContent: jest.fn((content: string) => `encrypted:${content}`),
 }))
 
-// --- fs モック ---
-jest.mock('fs', () => ({
-  existsSync: jest.fn(),
+// --- fs/promises モック ---
+const mockAccess = jest.fn()
+jest.mock('fs/promises', () => ({
+  access: (...args: unknown[]) => mockAccess(...args),
 }))
-import fs from 'fs'
-const mockExistsSync = fs.existsSync as jest.Mock
 
 // --- file-storage モック ---
 const mockGetLocalPath = jest.fn()
@@ -122,7 +121,7 @@ beforeEach(() => {
   })
   mockEmailJobUpdate.mockResolvedValue({})
   mockGetLocalPath.mockReturnValue('/app/uploads/resumes/talent-1-123456.pdf')
-  mockExistsSync.mockReturnValue(true)
+  mockAccess.mockResolvedValue(undefined)
 })
 
 // ─────────────────────────────────────────────
@@ -237,7 +236,7 @@ describe('POST /api/proposals/[id]/send-email', () => {
       mockAuth.mockResolvedValueOnce(staffSession)
       mockProposalFindUnique.mockResolvedValueOnce(baseProposal)
       mockGetLocalPath.mockReturnValue('/app/uploads/resumes/talent-1-123456.pdf')
-      mockExistsSync.mockReturnValue(true)
+      mockAccess.mockResolvedValue(undefined)
 
       await POST(
         makeReq('prop-1', { sendType: 'NOW' }),
@@ -257,7 +256,7 @@ describe('POST /api/proposals/[id]/send-email', () => {
       mockAuth.mockResolvedValueOnce(staffSession)
       mockProposalFindUnique.mockResolvedValueOnce(baseProposal)
       mockGetLocalPath.mockReturnValue('/app/uploads/resumes/talent-1-123456.pdf')
-      mockExistsSync.mockReturnValue(false)
+      mockAccess.mockRejectedValue(new Error('ENOENT'))
 
       await POST(
         makeReq('prop-1', { sendType: 'NOW' }),
