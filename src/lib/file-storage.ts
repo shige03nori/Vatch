@@ -5,6 +5,7 @@ import * as path from 'path'
 type StorageBackend = {
   save(key: string, buffer: Buffer): Promise<void>
   getUrl(key: string): string
+  getLocalPath(key: string): string | null
   delete(key: string): Promise<void>
 }
 
@@ -24,6 +25,14 @@ class LocalStorage implements StorageBackend {
 
   getUrl(key: string): string {
     return path.join(this.baseDir, key).split(path.sep).join('/')
+  }
+
+  getLocalPath(key: string): string | null {
+    const filePath = path.resolve(path.join(this.baseDir, key))
+    if (!filePath.startsWith(path.resolve(this.baseDir))) {
+      return null
+    }
+    return filePath
   }
 
   async delete(key: string): Promise<void> {

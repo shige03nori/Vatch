@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import fs from 'fs'
-import path from 'path'
 import { prisma } from '@/lib/prisma'
 import { ok, forbidden, notFound, unprocessable, serverError, requireAuth } from '@/lib/api'
 import { SendEmailRequestSchema } from '@/lib/schemas/email-job'
@@ -115,10 +114,10 @@ async function processEmailJob(
 
     const resumeKey = proposal.matching.talent.resumeKey
     let attachmentPath: string | null = null
-    if (resumeKey && !resumeKey.includes('..') && !path.isAbsolute(resumeKey)) {
-      const resolvedPath = getFileStorage().getUrl(resumeKey)
-      if (fs.existsSync(resolvedPath)) {
-        attachmentPath = resolvedPath
+    if (resumeKey) {
+      const localPath = getFileStorage().getLocalPath(resumeKey)
+      if (localPath && fs.existsSync(localPath)) {
+        attachmentPath = localPath
       }
     }
 
