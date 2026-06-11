@@ -60,10 +60,11 @@ export async function runIngestion(): Promise<IngestionResult> {
 
     try {
       emails = await fetchUnreadEmails({
-        imapHost: source.imapHost,
-        imapPort: source.imapPort,
-        imapUser: source.imapUser,
-        imapPass: decrypt(source.imapPass, ENCRYPTION_KEY),
+        imapHost:    source.imapHost,
+        imapPort:    source.imapPort,
+        imapUser:    source.imapUser,
+        imapPass:    decrypt(source.imapPass, ENCRYPTION_KEY),
+        imapFolders: source.imapFolders,
       })
     } catch (err) {
       console.error(`[ingestion] IMAP fetch failed for ${source.imapUser}:`, err)
@@ -71,6 +72,55 @@ export async function runIngestion(): Promise<IngestionResult> {
     }
 
     for (const fetched of emails) {
+      // ─── 返信メール（Re:/RE:）は Email テーブルに保存せず静かに処理 ───
+      const isReply = /^re[：:]\s*/i.test(fetched.subject)
+      if (isReply) {
+        const baseSubject = fetched.subject.replace(/^re[：:]\s*/i, '').trim()
+        const matchedProposal = await prisma.proposal.findFirst({
+          where: {
+            to: fetched.fromEmail,
+            status: { in: ['SENT', 'PENDING_AUTO'] },
+            ...(baseSubject ? { subject: { contains: baseSubject } } : {}),
+          },
+          orderBy: { sentAt: 'desc' },
+          include: { matching: true },
+        })
+
+        if (matchedProposal) {
+          try {
+            const replyResult = await analyzeReplyEmail(fetched.bodyText, matchedProposal.subject)
+
+            const proposalStatus =
+              replyResult.classification === 'REJECTED' ? 'REJECTED' : 'REPLIED'
+            const matchingStatus =
+              replyResult.classification === 'ACCEPTED'    ? 'CONTRACTED'   :
+              replyResult.classification === 'REJECTED'    ? 'REJECTED'     :
+              replyResult.classification === 'INTERVIEW'   ? 'INTERVIEWING' : 'REPLIED'
+
+            await prisma.proposal.update({
+              where: { id: matchedProposal.id },
+              data: { status: proposalStatus },
+            })
+            await prisma.matching.update({
+              where: { id: matchedProposal.matchingId },
+              data: { status: matchingStatus },
+            })
+            await prisma.activityLog.create({
+              data: {
+                type: 'PROPOSAL_REPLIED',
+                description: `返信解析: ${replyResult.classification} (${replyResult.confidence}%) — ${replyResult.summary}`,
+                proposalId: matchedProposal.id,
+                matchingId: matchedProposal.matchingId,
+              },
+            })
+            result.parsed++
+          } catch (replyErr) {
+            console.error(`[ingestion] Reply analysis failed:`, replyErr)
+          }
+        }
+        continue  // Re: メールは Email テーブルに保存しない
+      }
+
       // 重複チェック（Message-ID）
       if (fetched.messageId) {
         const existing = await prisma.email.findUnique({ where: { messageId: fetched.messageId } })
@@ -110,67 +160,6 @@ export async function runIngestion(): Promise<IngestionResult> {
       await prisma.activityLog.create({
         data: { type: 'EMAIL_RECEIVED', description: `メール取込: ${fetched.subject}`, emailId: emailRecord.id },
       })
-
-      // ─── 返信メール検出 ─────────────────────────────────────────────
-      const isReply = fetched.subject.toLowerCase().startsWith('re:') ||
-                      fetched.subject.toLowerCase().startsWith('re：')
-      if (isReply) {
-        // 件名から "Re: " を除去して元のsubjectを推定
-        const baseSubject = fetched.subject.replace(/^re[：:]\s*/i, '').trim()
-        // 送信者メールに一致する提案を検索
-        const matchedProposal = await prisma.proposal.findFirst({
-          where: {
-            to: fetched.fromEmail,
-            status: { in: ['SENT', 'PENDING_AUTO'] },
-            ...(baseSubject ? { subject: { contains: baseSubject } } : {}),
-          },
-          orderBy: { sentAt: 'desc' },
-          include: { matching: true },
-        })
-
-        if (matchedProposal) {
-          try {
-            const replyResult = await analyzeReplyEmail(fetched.bodyText, matchedProposal.subject)
-
-            // Proposal / Matching ステータスを更新
-            const proposalStatus =
-              replyResult.classification === 'REJECTED' ? 'REJECTED' : 'REPLIED'
-            const matchingStatus =
-              replyResult.classification === 'ACCEPTED'    ? 'CONTRACTED'   :
-              replyResult.classification === 'REJECTED'    ? 'REJECTED'     :
-              replyResult.classification === 'INTERVIEW'   ? 'INTERVIEWING' : 'REPLIED'
-
-            await prisma.proposal.update({
-              where: { id: matchedProposal.id },
-              data: { status: proposalStatus },
-            })
-            await prisma.matching.update({
-              where: { id: matchedProposal.matchingId },
-              data: { status: matchingStatus },
-            })
-
-            // Email レコードを PARSED/UNKNOWN に更新
-            await prisma.email.update({
-              where: { id: emailRecord.id },
-              data: { type: 'UNKNOWN', status: 'PARSED' },
-            })
-            await prisma.activityLog.create({
-              data: {
-                type: 'PROPOSAL_REPLIED',
-                description: `返信解析: ${replyResult.classification} (${replyResult.confidence}%) — ${replyResult.summary}`,
-                emailId: emailRecord.id,
-                proposalId: matchedProposal.id,
-                matchingId: matchedProposal.matchingId,
-              },
-            })
-            result.parsed++
-            continue  // 通常の解析をスキップ
-          } catch (replyErr) {
-            console.error(`[ingestion] Reply analysis failed for email ${emailRecord.id}:`, replyErr)
-            // フォールスルー → 通常のAI解析へ
-          }
-        }
-      }
 
       // AI解析
       await prisma.email.update({ where: { id: emailRecord.id }, data: { status: 'PARSING' } })

@@ -9,16 +9,20 @@ type EmailSource = {
   imapHost: string;
   imapPort: number;
   imapUser: string;
+  imapFolders: string[];
   isActive: boolean;
 };
 
-const emptyForm = { label: '', imapHost: '', imapPort: 993, imapUser: '', imapPass: '' };
+const emptyForm = { label: '', imapHost: '', imapPort: 993, imapUser: '', imapPass: '', imapFolders: ['INBOX'] };
 
 export default function EmailSourcesPage() {
   const [sources, setSources] = useState<EmailSource[]>([]);
   const [form, setForm] = useState(emptyForm);
+  const [folderInput, setFolderInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [editingFolders, setEditingFolders] = useState<{ id: string; folders: string[] } | null>(null);
+  const [folderEditInput, setFolderEditInput] = useState('');
 
   async function load() {
     const res = await fetch('/api/email-sources');
@@ -28,6 +32,17 @@ export default function EmailSourcesPage() {
   }
 
   useEffect(() => { load(); }, []);
+
+  function addFolderToForm() {
+    const trimmed = folderInput.trim();
+    if (!trimmed || form.imapFolders.includes(trimmed)) return;
+    setForm((f) => ({ ...f, imapFolders: [...f.imapFolders, trimmed] }));
+    setFolderInput('');
+  }
+
+  function removeFolderFromForm(folder: string) {
+    setForm((f) => ({ ...f, imapFolders: f.imapFolders.filter((x) => x !== folder) }));
+  }
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -45,6 +60,7 @@ export default function EmailSourcesPage() {
         return;
       }
       setForm(emptyForm);
+      setFolderInput('');
       await load();
     } finally {
       setSaving(false);
@@ -68,6 +84,34 @@ export default function EmailSourcesPage() {
     await load();
   }
 
+  function startEditFolders(src: EmailSource) {
+    setEditingFolders({ id: src.id, folders: [...src.imapFolders] });
+    setFolderEditInput('');
+  }
+
+  function addFolderToEdit() {
+    const trimmed = folderEditInput.trim();
+    if (!trimmed || !editingFolders || editingFolders.folders.includes(trimmed)) return;
+    setEditingFolders((prev) => prev ? { ...prev, folders: [...prev.folders, trimmed] } : null);
+    setFolderEditInput('');
+  }
+
+  function removeFolderFromEdit(folder: string) {
+    setEditingFolders((prev) => prev ? { ...prev, folders: prev.folders.filter((x) => x !== folder) } : null);
+  }
+
+  async function saveFolders() {
+    if (!editingFolders || editingFolders.folders.length === 0) return;
+    const res = await fetch(`/api/email-sources/${editingFolders.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imapFolders: editingFolders.folders }),
+    });
+    if (!res.ok) { alert('更新に失敗しました'); return; }
+    setEditingFolders(null);
+    await load();
+  }
+
   return (
     <div className="flex-1 flex flex-col min-h-screen bg-vatch-bg">
       <Topbar title="メール取込設定" />
@@ -86,6 +130,7 @@ export default function EmailSourcesPage() {
                   <th className="px-4 py-2 text-left text-[11px] font-semibold text-vatch-muted">ラベル</th>
                   <th className="px-4 py-2 text-left text-[11px] font-semibold text-vatch-muted">IMAPホスト</th>
                   <th className="px-4 py-2 text-left text-[11px] font-semibold text-vatch-muted">ユーザー</th>
+                  <th className="px-4 py-2 text-left text-[11px] font-semibold text-vatch-muted">取込フォルダ</th>
                   <th className="px-4 py-2 text-left text-[11px] font-semibold text-vatch-muted">状態</th>
                   <th className="px-4 py-2"></th>
                 </tr>
@@ -96,6 +141,41 @@ export default function EmailSourcesPage() {
                     <td className="px-4 py-3 text-[13px] text-vatch-text">{src.label}</td>
                     <td className="px-4 py-3 text-[13px] text-vatch-text-dim">{src.imapHost}:{src.imapPort}</td>
                     <td className="px-4 py-3 text-[13px] text-vatch-text-dim">{src.imapUser}</td>
+                    <td className="px-4 py-3">
+                      {editingFolders?.id === src.id ? (
+                        <div className="flex flex-col gap-1">
+                          <div className="flex flex-wrap gap-1">
+                            {editingFolders.folders.map((f) => (
+                              <span key={f} className="flex items-center gap-1 px-2 py-0.5 rounded bg-vatch-cyan/10 text-vatch-cyan text-[11px] border border-vatch-cyan/30">
+                                {f}
+                                {editingFolders.folders.length > 1 && (
+                                  <button onClick={() => removeFolderFromEdit(f)} className="hover:text-vatch-red">×</button>
+                                )}
+                              </span>
+                            ))}
+                          </div>
+                          <div className="flex gap-1 mt-1">
+                            <input
+                              value={folderEditInput}
+                              onChange={(e) => setFolderEditInput(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addFolderToEdit(); } }}
+                              placeholder="フォルダ名"
+                              className="flex-1 px-2 py-1 rounded bg-vatch-bg border border-vatch-border text-[12px] text-vatch-text focus:outline-none focus:border-vatch-cyan"
+                            />
+                            <button onClick={addFolderToEdit} className="px-2 py-1 rounded bg-vatch-cyan/10 text-vatch-cyan text-[11px] border border-vatch-cyan/30 hover:bg-vatch-cyan/20">追加</button>
+                            <button onClick={saveFolders} className="px-2 py-1 rounded bg-vatch-cyan text-vatch-bg text-[11px] font-semibold hover:bg-vatch-cyan/90">保存</button>
+                            <button onClick={() => setEditingFolders(null)} className="px-2 py-1 rounded text-vatch-muted text-[11px] hover:text-vatch-text">取消</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap gap-1 items-center">
+                          {src.imapFolders.map((f) => (
+                            <span key={f} className="px-2 py-0.5 rounded bg-vatch-cyan/10 text-vatch-cyan text-[11px] border border-vatch-cyan/30">{f}</span>
+                          ))}
+                          <button onClick={() => startEditFolders(src)} className="ml-1 text-[11px] text-vatch-muted hover:text-vatch-cyan underline">編集</button>
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <button
                         onClick={() => handleToggle(src.id, src.isActive)}
@@ -147,6 +227,31 @@ export default function EmailSourcesPage() {
                 />
               </div>
             ))}
+            {/* フォルダ設定 */}
+            <div className="col-span-2">
+              <label className="block text-[12px] text-vatch-muted mb-1">取込フォルダ</label>
+              <div className="flex flex-wrap gap-1 mb-2">
+                {form.imapFolders.map((f) => (
+                  <span key={f} className="flex items-center gap-1 px-2 py-0.5 rounded bg-vatch-cyan/10 text-vatch-cyan text-[11px] border border-vatch-cyan/30">
+                    {f}
+                    {form.imapFolders.length > 1 && (
+                      <button type="button" onClick={() => removeFolderFromForm(f)} className="hover:text-vatch-red">×</button>
+                    )}
+                  </span>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={folderInput}
+                  onChange={(e) => setFolderInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addFolderToForm(); } }}
+                  placeholder="フォルダ名を追加（例: アートテクノロジー）"
+                  className="flex-1 px-3 py-2 rounded-lg bg-vatch-bg border border-vatch-border text-[13px] text-vatch-text placeholder:text-vatch-muted focus:outline-none focus:border-vatch-cyan"
+                />
+                <button type="button" onClick={addFolderToForm} className="px-3 py-2 rounded-lg bg-vatch-cyan/10 text-vatch-cyan text-[13px] border border-vatch-cyan/30 hover:bg-vatch-cyan/20">追加</button>
+              </div>
+            </div>
             <div className="col-span-2 flex justify-end">
               <button
                 type="submit"

@@ -381,13 +381,14 @@ enum ActivityLogType {
 }
 
 model EmailSource {
-  id       String  @id @default(cuid())
-  label    String
-  imapHost String
-  imapPort Int     @default(993)
-  imapUser String
-  imapPass String
-  isActive Boolean @default(true)
+  id          String   @id @default(cuid())
+  label       String
+  imapHost    String
+  imapPort    Int      @default(993)
+  imapUser    String
+  imapPass    String
+  imapFolders String[] @default(["INBOX"])
+  isActive    Boolean  @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

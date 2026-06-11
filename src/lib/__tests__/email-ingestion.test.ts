@@ -12,6 +12,9 @@ const mockTalentUpdate = jest.fn()
 const mockUserFindFirst = jest.fn()
 const mockActivityCreate = jest.fn()
 const mockEmailSourceFindMany = jest.fn()
+const mockProposalFindFirst = jest.fn()
+const mockProposalUpdate = jest.fn()
+const mockMatchingUpdate = jest.fn()
 
 jest.mock('@/lib/prisma', () => ({
   prisma: {
@@ -21,6 +24,8 @@ jest.mock('@/lib/prisma', () => ({
     user:        { findFirst: (...a: unknown[]) => mockUserFindFirst(...a) },
     activityLog: { create: (...a: unknown[]) => mockActivityCreate(...a) },
     emailSource: { findMany: (...a: unknown[]) => mockEmailSourceFindMany(...a) },
+    proposal:    { findFirst: (...a: unknown[]) => mockProposalFindFirst(...a), update: (...a: unknown[]) => mockProposalUpdate(...a) },
+    matching:    { update: (...a: unknown[]) => mockMatchingUpdate(...a) },
   },
 }))
 
@@ -34,6 +39,12 @@ jest.mock('../email-fetcher', () => ({
 const mockParseEmailBody = jest.fn()
 jest.mock('../email-parser', () => ({
   parseEmailBody: (...a: unknown[]) => mockParseEmailBody(...a),
+}))
+
+// reply-analyzerモック
+const mockAnalyzeReplyEmail = jest.fn()
+jest.mock('../reply-analyzer', () => ({
+  analyzeReplyEmail: (...a: unknown[]) => mockAnalyzeReplyEmail(...a),
 }))
 
 // cryptoモック
@@ -71,7 +82,7 @@ const mockFetchedEmail = {
 
 const mockAdminUser = { id: 'admin1', role: 'ADMIN' }
 
-beforeEach(() => jest.clearAllMocks())
+beforeEach(() => jest.resetAllMocks())
 
 describe('runIngestion', () => {
   it('fetches emails from active sources and creates CASE record', async () => {
@@ -146,6 +157,98 @@ describe('runIngestion', () => {
 
     expect(result.parsed).toBe(1)
     expect(mockTalentCreate).toHaveBeenCalledTimes(1)
+  })
+
+  describe('reply email processing', () => {
+    const mockReplyEmail = {
+      messageId: '<reply@example.com>',
+      inReplyTo: '<original@example.com>',
+      from: 'Client Name',
+      fromEmail: 'client@example.com',
+      subject: 'Re: 【ご提案】Javaエンジニア ご紹介の件',
+      bodyText: '面談の機会をいただきたく存じます。',
+      receivedAt: new Date('2026-04-01T10:00:00Z'),
+      attachments: [],
+    }
+
+    const mockMatchedProposal = {
+      id: 'proposal1',
+      matchingId: 'matching1',
+      subject: '【ご提案】Javaエンジニア ご紹介の件',
+      to: 'client@example.com',
+      status: 'SENT',
+    }
+
+    it('updates proposal and matching status when reply matches a sent proposal', async () => {
+      mockEmailSourceFindMany.mockResolvedValueOnce([mockSource])
+      mockFetchUnreadEmails.mockResolvedValueOnce([mockReplyEmail])
+      mockEmailFindUnique.mockResolvedValueOnce(null)
+      mockEmailCreate.mockResolvedValueOnce({ id: 'email1' })
+      mockEmailUpdate.mockResolvedValue({})
+      mockProposalFindFirst.mockResolvedValueOnce(mockMatchedProposal)
+      mockAnalyzeReplyEmail.mockResolvedValueOnce({
+        classification: 'INTERVIEW',
+        confidence: 90,
+        summary: '面談を希望している',
+      })
+      mockProposalUpdate.mockResolvedValue({})
+      mockMatchingUpdate.mockResolvedValue({})
+      mockActivityCreate.mockResolvedValue({})
+
+      const result = await runIngestion()
+
+      expect(result.parsed).toBe(1)
+      expect(result.errors).toBe(0)
+      expect(mockProposalUpdate).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'proposal1' },
+        data: { status: 'REPLIED' },
+      }))
+      expect(mockMatchingUpdate).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'matching1' },
+        data: { status: 'INTERVIEWING' },
+      }))
+      expect(mockParseEmailBody).not.toHaveBeenCalled()
+    })
+
+    it('sets proposal status=REJECTED and matching status=REJECTED when reply is rejection', async () => {
+      mockEmailSourceFindMany.mockResolvedValueOnce([mockSource])
+      mockFetchUnreadEmails.mockResolvedValueOnce([mockReplyEmail])
+      mockEmailFindUnique.mockResolvedValueOnce(null)
+      mockEmailCreate.mockResolvedValueOnce({ id: 'email2' })
+      mockEmailUpdate.mockResolvedValue({})
+      mockProposalFindFirst.mockResolvedValueOnce(mockMatchedProposal)
+      mockAnalyzeReplyEmail.mockResolvedValueOnce({
+        classification: 'REJECTED',
+        confidence: 95,
+        summary: '今回はお断りします',
+      })
+      mockProposalUpdate.mockResolvedValue({})
+      mockMatchingUpdate.mockResolvedValue({})
+      mockActivityCreate.mockResolvedValue({})
+
+      await runIngestion()
+
+      expect(mockProposalUpdate).toHaveBeenCalledWith(expect.objectContaining({
+        data: { status: 'REJECTED' },
+      }))
+      expect(mockMatchingUpdate).toHaveBeenCalledWith(expect.objectContaining({
+        data: { status: 'REJECTED' },
+      }))
+    })
+
+    it('silently discards reply email when no matching proposal found', async () => {
+      mockEmailSourceFindMany.mockResolvedValueOnce([mockSource])
+      mockFetchUnreadEmails.mockResolvedValueOnce([mockReplyEmail])
+      mockProposalFindFirst.mockResolvedValueOnce(null)
+
+      const result = await runIngestion()
+
+      // Re: メールはEmail DBに保存しない・AI解析もしない
+      expect(result.fetched).toBe(0)
+      expect(result.unknown).toBe(0)
+      expect(mockEmailCreate).not.toHaveBeenCalled()
+      expect(mockParseEmailBody).not.toHaveBeenCalled()
+    })
   })
 
   it('returns unknown count when type is UNKNOWN', async () => {

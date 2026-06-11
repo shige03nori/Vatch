@@ -34,6 +34,7 @@ export type ImapConfig = {
   imapPort: number
   imapUser: string
   imapPass: string
+  imapFolders?: string[]
 }
 
 function extractAttachments(parsed: Awaited<ReturnType<typeof simpleParser>>): FetchedAttachment[] {
@@ -55,6 +56,8 @@ function extractAttachments(parsed: Awaited<ReturnType<typeof simpleParser>>): F
 }
 
 export async function fetchUnreadEmails(config: ImapConfig): Promise<FetchedEmail[]> {
+  const folders = config.imapFolders && config.imapFolders.length > 0 ? config.imapFolders : ['INBOX']
+
   const connection = await imaps.connect({
     imap: {
       host: config.imapHost,
@@ -69,39 +72,51 @@ export async function fetchUnreadEmails(config: ImapConfig): Promise<FetchedEmai
     },
   })
 
-  await connection.openBox('INBOX')
-
   const since = new Date()
-  since.setDate(since.getDate() - 2)
+  since.setDate(since.getDate() - 3)
   since.setHours(0, 0, 0, 0)
 
-  const searchCriteria = ['UNSEEN', ['SINCE', since]]
-  const fetchOptions = { bodies: ['HEADER', 'TEXT', ''], markSeen: true }
+  const searchCriteria = [['SINCE', since]]
+  const fetchOptions = { bodies: ['HEADER', 'TEXT', ''], markSeen: false }
 
-  const messages = await connection.search(searchCriteria, fetchOptions)
-  connection.end()
+  const allResults: FetchedEmail[] = []
+  const seenMessageIds = new Set<string>()
 
-  const results: FetchedEmail[] = []
+  for (const folder of folders) {
+    try {
+      await connection.openBox(folder)
+    } catch {
+      console.warn(`[fetcher] Failed to open folder "${folder}", skipping`)
+      continue
+    }
 
-  for (const message of messages) {
-    const all = message.parts.find((p) => p.which === '')
-    if (!all) continue
+    const messages = await connection.search(searchCriteria, fetchOptions)
 
-    const parsed = await simpleParser(all.body as string)
-    const from = parsed.from?.value[0]
+    for (const message of messages) {
+      const all = message.parts.find((p) => p.which === '')
+      if (!all) continue
 
-    results.push({
-      messageId:   parsed.messageId ?? null,
-      inReplyTo:   (parsed.inReplyTo && typeof parsed.inReplyTo === 'string' ? parsed.inReplyTo : null),
-      from:        from?.name ?? from?.address ?? '',
-      fromEmail:   from?.address ?? '',
-      subject:     parsed.subject ?? '(件名なし)',
-      bodyText:    parsed.text ?? '',
-      receivedAt:  parsed.date ?? new Date(),
-      attachments: extractAttachments(parsed),
-    })
+      const parsed = await simpleParser(all.body as string)
+      const msgId = parsed.messageId ?? null
+
+      // 複数フォルダで同じメールが重複しないようにする
+      if (msgId && seenMessageIds.has(msgId)) continue
+      if (msgId) seenMessageIds.add(msgId)
+
+      const from = parsed.from?.value[0]
+      allResults.push({
+        messageId:   msgId,
+        inReplyTo:   (parsed.inReplyTo && typeof parsed.inReplyTo === 'string' ? parsed.inReplyTo : null),
+        from:        from?.name ?? from?.address ?? '',
+        fromEmail:   from?.address ?? '',
+        subject:     parsed.subject ?? '(件名なし)',
+        bodyText:    parsed.text ?? '',
+        receivedAt:  parsed.date ?? new Date(),
+        attachments: extractAttachments(parsed),
+      })
+    }
   }
 
-  // Re: / RE: で始まる返信メールを除外
-  return results.filter((m) => !/^Re:/i.test(m.subject))
+  connection.end()
+  return allResults
 }
