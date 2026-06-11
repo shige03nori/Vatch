@@ -88,6 +88,24 @@ fly deploy                              # 本番へデプロイ
 
 ---
 
+## MCP ツール
+
+以下の MCP が利用可能。積極的に活用すること。
+
+### GitHub MCP（`mcp__github__*`）
+
+- リポジトリ: `shige03nori/Vatch`
+- Issue の作成・参照・更新、PR の作成・レビュー・マージ、ファイルの取得・プッシュなどが可能
+- コード変更を GitHub に反映する際や Issue 管理には Bash の `git` / `gh` コマンドではなく MCP を優先する
+
+### PostgreSQL MCP（`mcp__postgres__query`）
+
+- 接続先: Vatch の PostgreSQL DB（PostgreSQL 15.17）
+- 読み取り専用クエリのみ実行可能
+- DB の現状確認・デバッグ・データ検証に使う（書き込みは Prisma 経由で行う）
+
+---
+
 ## ブランチ運用
 
 マージは必ず以下の順番で行う:
