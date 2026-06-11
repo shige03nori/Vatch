@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server'
+import { access } from 'fs/promises'
 import { prisma } from '@/lib/prisma'
 import { ok, forbidden, notFound, unprocessable, serverError, requireAuth } from '@/lib/api'
 import { SendEmailRequestSchema } from '@/lib/schemas/email-job'
 import { generateEmailContent } from '@/lib/email-generator'
 import { encryptContent } from '@/lib/email-encryptor'
+import { getFileStorage } from '@/lib/file-storage'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -90,7 +92,7 @@ async function processEmailJob(
         title: proposal.matching.case.title,
         client: proposal.matching.case.client,
         amount: proposal.sellPrice,
-        startDate: new Date(), // TODO: Case.startDate から取得
+        startDate: proposal.matching.case.startDate,
       },
       contract: {
         unitPrice: proposal.contract?.unitPrice || proposal.sellPrice,
@@ -110,8 +112,19 @@ async function processEmailJob(
     // コンテンツを暗号化して保存
     const encryptedContent = encryptContent(emailContent)
 
-    // 経歴書ファイルパス取得（dummy、実装は別タスク）
-    const attachmentPath = null
+    const resumeKey = proposal.matching.talent.resumeKey
+    let attachmentPath: string | null = null
+    if (resumeKey) {
+      const localPath = getFileStorage().getLocalPath(resumeKey)
+      if (localPath) {
+        try {
+          await access(localPath)
+          attachmentPath = localPath
+        } catch {
+          // ファイルが存在しない場合は添付なしで続行
+        }
+      }
+    }
 
     // SendType が NOW の場合、即座に送信
     if (sendType === 'NOW') {
