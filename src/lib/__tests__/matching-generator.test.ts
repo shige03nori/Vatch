@@ -47,6 +47,11 @@ const mockTalent: Talent = {
   agencyEmail: 'agency@example.com',
   assignedUserId: 'user-1',
   sourceEmailId: null,
+  resumeKey: null,
+  resumeFilename: null,
+  talentType: "EXTERNAL",
+  office: null,
+  userId: null,
   createdAt: new Date(),
   updatedAt: new Date(),
 }
