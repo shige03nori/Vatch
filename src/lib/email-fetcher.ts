@@ -20,6 +20,7 @@ type FetchedAttachment = {
 
 export type FetchedEmail = {
   messageId: string | null
+  inReplyTo: string | null
   from: string
   fromEmail: string
   subject: string
@@ -91,6 +92,7 @@ export async function fetchUnreadEmails(config: ImapConfig): Promise<FetchedEmai
 
     results.push({
       messageId:   parsed.messageId ?? null,
+      inReplyTo:   (parsed.inReplyTo && typeof parsed.inReplyTo === 'string' ? parsed.inReplyTo : null),
       from:        from?.name ?? from?.address ?? '',
       fromEmail:   from?.address ?? '',
       subject:     parsed.subject ?? '(件名なし)',
