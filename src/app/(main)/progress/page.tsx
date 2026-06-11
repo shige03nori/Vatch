@@ -32,7 +32,7 @@ export default async function ProgressPage() {
   const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1)
 
   // ─── Fetch data ─────────────────────────────────────────────────────────────
-  const [pipelineMatchings, proposals, contracts, proposalsByUser] = await Promise.all([
+  const [pipelineMatchings, proposals, contracts, proposalsByUser, forecastData] = await Promise.all([
     // 1. Pipeline: current active matchings
     prisma.matching.findMany({
       where: {
@@ -84,6 +84,25 @@ export default async function ProgressPage() {
         },
       },
     }),
+    // 5. Forecast: active contracts + pipeline matchings with case startDate
+    Promise.all([
+      prisma.contract.findMany({
+        where: { status: { in: ['ACTIVE', 'RENEWAL_PENDING', 'ENDING_SOON'] }, ...userWhere },
+        select: { unitPrice: true, costPrice: true, endDate: true },
+      }),
+      prisma.matching.findMany({
+        where: {
+          ...caseWhere,
+          status: { in: ['SENT', 'REPLIED', 'INTERVIEWING'] },
+        },
+        select: {
+          status: true,
+          sellPrice: true,
+          costPrice: true,
+          case: { select: { startDate: true } },
+        },
+      }),
+    ]),
   ])
 
   // ─── Pipeline stages ─────────────────────────────────────────────────────────
@@ -174,6 +193,29 @@ export default async function ProgressPage() {
       winRate: rep.proposals > 0 ? (rep.contracts / rep.proposals) * 100 : 0,
     }))
     .sort((a, b) => b.grossProfit - a.grossProfit)
+
+  // ─── Forecast（今後3ヶ月）────────────────────────────────────────────────────
+  const [activeContracts, forecastMatchings] = forecastData
+  const WIN_RATE: Record<string, number> = { INTERVIEWING: 0.7, REPLIED: 0.4, SENT: 0.2 }
+  const forecastMonths = Array.from({ length: 3 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() + 1 + i, 1)
+    const key = monthKey(d)
+    // 確定収益: 稼働中契約（終了していないもの）の月次粗利
+    const confirmed = activeContracts
+      .filter((c) => !c.endDate || new Date(c.endDate) >= d)
+      .reduce((s, c) => s + (c.unitPrice - c.costPrice), 0)
+    // パイプライン期待値: 案件開始日がその月の matchings × 勝率 × 粗利
+    const expected = forecastMatchings
+      .filter((m) => monthKey(new Date(m.case.startDate)) === key)
+      .reduce((s, m) => s + Math.round((m.sellPrice - m.costPrice) * (WIN_RATE[m.status] ?? 0)), 0)
+    return {
+      month: `${d.getMonth() + 1}月`,
+      confirmed,
+      expected,
+      total: confirmed + expected,
+    }
+  })
+  const forecastMax = Math.max(...forecastMonths.map((f) => f.total), 1)
 
   // ─── Render ──────────────────────────────────────────────────────────────────
   return (
